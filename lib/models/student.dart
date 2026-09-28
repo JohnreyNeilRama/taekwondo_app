@@ -28,9 +28,11 @@ class Student {
     this.previousMartialArts = '',
     this.otherHobbiesSports = '',
     this.healthConditions = '',
+    this.photoBase64 = '',
   });
 
   final String name;
+
   /// Registry number shown on the list card, e.g. `TKD-0001`. Assigned
   /// by the students list when a record is created; kept on edit.
   final String studentNo;
@@ -63,6 +65,10 @@ class Student {
   final String previousMartialArts;
   final String otherHobbiesSports;
   final String healthConditions;
+
+  /// The persisted JPG/PNG bytes, encoded as base64. Keeping this in
+  /// the student record associates the photo with the correct account.
+  final String photoBase64;
 
   String get initials {
     final parts = name
@@ -104,6 +110,7 @@ class Student {
     previousMartialArts: previousMartialArts,
     otherHobbiesSports: otherHobbiesSports,
     healthConditions: healthConditions,
+    photoBase64: photoBase64,
   );
 
   /// Serializes the record so it can be persisted as JSON (see
@@ -136,6 +143,7 @@ class Student {
     'previousMartialArts': previousMartialArts,
     'otherHobbiesSports': otherHobbiesSports,
     'healthConditions': healthConditions,
+    'photoBase64': photoBase64,
   };
 
   /// Rebuilds a [Student] from JSON previously written by [toJson].
@@ -169,5 +177,6 @@ class Student {
     previousMartialArts: json['previousMartialArts'] as String? ?? '',
     otherHobbiesSports: json['otherHobbiesSports'] as String? ?? '',
     healthConditions: json['healthConditions'] as String? ?? '',
+    photoBase64: json['photoBase64'] as String? ?? '',
   );
 }

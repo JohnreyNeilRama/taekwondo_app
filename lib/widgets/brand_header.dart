@@ -62,10 +62,7 @@ class BrandHeader extends StatelessWidget {
                   ),
                 ],
               ),
-              if (bottom != null) ...[
-                const SizedBox(height: 16),
-                bottom!,
-              ],
+              if (bottom != null) ...[const SizedBox(height: 16), bottom!],
             ],
           ),
         ),

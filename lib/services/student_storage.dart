@@ -38,7 +38,8 @@ class StudentStorage {
 
   static File _resolveFile() {
     final env = Platform.environment;
-    final base = env['APPDATA'] ??
+    final base =
+        env['APPDATA'] ??
         _roamingFromUserProfile(env) ??
         env['HOME'] ??
         _stableTempBase();

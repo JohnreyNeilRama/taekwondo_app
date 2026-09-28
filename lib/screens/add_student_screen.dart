@@ -1,4 +1,8 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../models/student.dart';
 import '../theme/app_theme.dart';
@@ -53,6 +57,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   final Map<String, TextEditingController> _controllers = {};
   String? _sex;
   DateTime? _birthDate;
+  String _photoBase64 = '';
 
   bool get _isEditing => widget.initial != null;
 
@@ -70,6 +75,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
       }
       _sex = _sexOptions.contains(initial.sex) ? initial.sex : null;
       _birthDate = _parseBirthDate(initial.birthDate);
+      _photoBase64 = initial.photoBase64;
     }
   }
 
@@ -175,6 +181,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         previousMartialArts: _controllers['previousMartialArts']!.text.trim(),
         otherHobbiesSports: _controllers['otherHobbiesSports']!.text.trim(),
         healthConditions: _controllers['healthConditions']!.text.trim(),
+        photoBase64: _photoBase64,
       ),
     );
   }
@@ -452,15 +459,29 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         SizedBox(
           width: 88,
           height: 88,
-          child: CustomPaint(
-            painter: const _DashedRectPainter(),
-            child: const Center(
-              child: Icon(
-                Icons.camera_alt_outlined,
-                size: 30,
-                color: AppColors.muted,
-              ),
-            ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: _photoBytes == null
+                ? CustomPaint(
+                    painter: const _DashedRectPainter(),
+                    child: const Center(
+                      child: Icon(
+                        Icons.camera_alt_outlined,
+                        size: 30,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  )
+                : Image.memory(
+                    _photoBytes!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => const Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
           ),
         ),
         const SizedBox(width: 16),
@@ -503,12 +524,52 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     );
   }
 
-  void _uploadPhoto() {
+  Future<void> _uploadPhoto() async {
+    try {
+      final file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+      if (file == null) return;
+      final bytes = await file.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        _showPhotoError('Photo must be 5 MB or smaller.');
+        return;
+      }
+      final extension = file.name.toLowerCase();
+      if (!extension.endsWith('.jpg') &&
+          !extension.endsWith('.jpeg') &&
+          !extension.endsWith('.png')) {
+        _showPhotoError('Please choose a JPG or PNG image.');
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _photoBase64 = base64Encode(bytes));
+    } catch (error) {
+      debugPrint('Photo picker failed: $error');
+      _showPhotoError(
+        kIsWeb
+            ? 'The browser blocked the image picker. Open the app in a new browser tab and try again.'
+            : 'Could not open the image picker. Please try again.',
+      );
+    }
+  }
+
+  Uint8List? get _photoBytes {
+    if (_photoBase64.isEmpty) return null;
+    try {
+      return base64Decode(_photoBase64);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _showPhotoError(String message) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Photo upload is not available yet.'),
-        behavior: SnackBarBehavior.floating,
-      ),
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 

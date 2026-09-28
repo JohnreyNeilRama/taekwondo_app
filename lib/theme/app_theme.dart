@@ -15,9 +15,7 @@ class AppColors {
 }
 
 ThemeData buildAppTheme() {
-  final colorScheme = ColorScheme.fromSeed(
-    seedColor: AppColors.red,
-  ).copyWith(
+  final colorScheme = ColorScheme.fromSeed(seedColor: AppColors.red).copyWith(
     primary: AppColors.black,
     onPrimary: Colors.white,
     surface: AppColors.surface,
@@ -32,9 +30,7 @@ ThemeData buildAppTheme() {
         backgroundColor: AppColors.black,
         foregroundColor: Colors.white,
         minimumSize: const Size(0, 44),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
       ),
     ),
