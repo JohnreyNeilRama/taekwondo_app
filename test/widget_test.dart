@@ -1,66 +1,66 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:tkd_app/main.dart';
-import 'package:tkd_app/services/achievement_storage.dart';
-import 'package:tkd_app/services/promotion_storage.dart';
-import 'package:tkd_app/services/student_storage.dart';
-
-late Directory _tempDir;
+import 'package:tkd_app/services/app_database.dart';
 
 /// Flushes both kinds of async work this app relies on.
 ///
-/// The storage layer uses real file I/O, which only completes on the real
-/// event loop, so real time has to be yielded with
-/// [WidgetTester.runAsync]. Navigation transitions and menus, on the other
-/// hand, advance on the fake clock, so frames have to be pumped with a
-/// duration for them to finish. Alternating the two lets both complete.
+/// The storage layer runs real SQLite work, which only completes on the real
+/// event loop, so real time has to be yielded with [WidgetTester.runAsync].
+/// Navigation transitions and menus, on the other hand, advance on the fake
+/// clock, so frames have to be pumped with a duration for them to finish.
+/// Alternating the two lets both complete.
 ///
-/// Bounded pumps are used rather than `pumpAndSettle` because an open
-/// dropdown or a loading spinner animates indefinitely and would make
-/// `pumpAndSettle` never return.
+/// Bounded pumps are used rather than `pumpAndSettle` because an open dropdown
+/// or a loading spinner animates indefinitely and would make `pumpAndSettle`
+/// never return.
 Future<void> _settle(WidgetTester tester) async {
-  for (var i = 0; i < 10; i++) {
+  for (var i = 0; i < 12; i++) {
     await tester.runAsync(
       () => Future<void>.delayed(const Duration(milliseconds: 30)),
     );
-    await tester.pump(const Duration(milliseconds: 60));
+    await tester.pump(const Duration(milliseconds: 80));
   }
 }
 
+/// Opens the database, then builds the app on it.
+///
+/// The very first call to the database has to answer from the real event loop,
+/// so it is made here — in a `runAsync` window, before the fake clock starts
+/// driving the widgets. Everything the screens ask for afterwards completes
+/// inside [_settle].
+Future<void> _startApp(WidgetTester tester) async {
+  await tester.runAsync(() => AppDatabase.instance.database);
+  await tester.pumpWidget(const TkdApp());
+  await _settle(tester);
+}
+
 void main() {
-  setUp(() async {
-    // Tests point storage at a throwaway temp file so they never
-    // touch real data.
-    _tempDir = await Directory.systemTemp.createTemp('tkd_app_test');
-    StudentStorage.debugOverrideFile = File('${_tempDir.path}/students.json');
-    PromotionStorage.debugOverrideFile = File('${_tempDir.path}/promos.json');
-    AchievementStorage.debugOverrideFile = File(
-      '${_tempDir.path}/achievements.json',
-    );
+  setUpAll(() {
+    // The screens now read and write the real database, so it is opened
+    // through the FFI implementation instead of a platform channel.
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
   });
 
-  tearDownAll(() async {
-    StudentStorage.debugOverrideFile = null;
-    PromotionStorage.debugOverrideFile = null;
-    AchievementStorage.debugOverrideFile = null;
-    // Give any in-flight write a moment to release its file handle,
-    // then clean up best-effort - a failed cleanup must not fail tests.
-    await Future<void>.delayed(const Duration(milliseconds: 200));
-    try {
-      if (_tempDir.existsSync()) {
-        await _tempDir.delete(recursive: true);
-      }
-    } catch (_) {}
+  setUp(() async {
+    // Every test starts from its own empty in-memory database, so no test can
+    // see another one's records and the registry on the device is never
+    // touched.
+    await AppDatabase.debugReset();
+    AppDatabase.debugOverridePath = inMemoryDatabasePath;
+  });
+
+  tearDown(() async {
+    await AppDatabase.debugReset();
   });
 
   testWidgets('Students screen: empty state, add student, search', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const TkdApp());
-    await _settle(tester);
+    await _startApp(tester);
 
     // Empty state on first launch.
     expect(find.text('TKD Records'), findsOneWidget);
@@ -99,8 +99,7 @@ void main() {
   testWidgets('Bottom navigation switches between the new destinations', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const TkdApp());
-    await _settle(tester);
+    await _startApp(tester);
 
     // Promotion: reads the real registry, so with no students saved it
     // explains that the registry must be filled first.
@@ -115,9 +114,11 @@ void main() {
       ),
       findsOneWidget,
     );
+    // Nobody is waiting for a belt while the registry is empty.
+    expect(find.text('Pending (0)'), findsOneWidget);
 
     // The Quick Cards are always on screen — above the search box and the
-    // Add Student button — as one card per belt colour, all reading 0 while
+    // Pending button — as one card per belt colour, all reading 0 while
     // nothing has been recorded yet.
     for (final label in const [
       'Black Belts',
@@ -180,14 +181,13 @@ void main() {
   });
 
   testWidgets(
-    'Promotion "Add Student" offers students added after app launch',
+    'Promotion "Pending" offers students added after app launch',
     (WidgetTester tester) async {
-      await tester.pumpWidget(const TkdApp());
-      await _settle(tester);
+      await _startApp(tester);
 
       // The Promotion screen is built at launch by the IndexedStack, before
       // any student exists. Adding a student afterwards must still make them
-      // selectable from the Promotion picker.
+      // turn up as pending for a belt.
       await tester.tap(find.text('+ Add Student').first);
       await _settle(tester);
       await tester.enterText(
@@ -200,16 +200,20 @@ void main() {
       await tester.tap(find.text('Promotion').last);
       await _settle(tester);
       expect(find.text('No promotion records yet'), findsOneWidget);
-      // The picker then reads the registry from disk: real file I/O on the
-      // fake clock, so its continuation needs both real time and a frame.
-      // The button opens the picker over the existing registry; it never
-      // creates a student. The row's own button is the first of the two on
-      // screen (the other sits in the empty state below the fold).
-      await tester.tap(find.text('Add Student').first);
+      // The student was saved with no belt, so they are counted as pending.
+      expect(find.text('Pending (1)'), findsOneWidget);
+
+      // The Pending button opens the list of students who still need a belt;
+      // it never creates one. The picker then reads the registry from disk:
+      // real file I/O on the fake clock, so its continuation needs both real
+      // time and a frame.
+      await tester.tap(find.widgetWithText(FilledButton, 'Pending (1)'));
       await _settle(tester);
 
-      // The picker lists the student that already exists in the registry.
+      // The picker offers the student that already exists in the registry.
       expect(find.text('Search your students'), findsOneWidget);
+      expect(find.text('Pending Students'), findsOneWidget);
+      expect(find.text('Students without a belt (1)'), findsOneWidget);
       expect(find.text('Nguyen Van A'), findsOneWidget);
 
       // Choosing them opens the promotion form for that same record.
@@ -238,6 +242,8 @@ void main() {
         ),
         findsOneWidget,
       );
+      // The belt is saved, so the student has left Pending.
+      expect(find.text('Pending (0)'), findsOneWidget);
 
       // The registry itself is untouched: still exactly one student record.
       await tester.tap(find.text('Students').last);
@@ -250,8 +256,7 @@ void main() {
   testWidgets(
     'Tapping a student opens the detail screen and editing saves changes',
     (WidgetTester tester) async {
-      await tester.pumpWidget(const TkdApp());
-      await _settle(tester);
+      await _startApp(tester);
 
       // Seed one student.
       await tester.tap(find.text('+ Add Student').first);
@@ -293,8 +298,7 @@ void main() {
   testWidgets('Deleting a student from the detail screen removes it', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const TkdApp());
-    await _settle(tester);
+    await _startApp(tester);
 
     await tester.tap(find.text('+ Add Student').first);
     await _settle(tester);
@@ -321,8 +325,7 @@ void main() {
   testWidgets('Card Edit button opens the form directly in edit mode', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const TkdApp());
-    await _settle(tester);
+    await _startApp(tester);
 
     // Seed one student.
     await tester.tap(find.text('+ Add Student').first);
@@ -356,8 +359,7 @@ void main() {
   testWidgets('Achievement "Add Student" records an award for a student', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(const TkdApp());
-    await _settle(tester);
+    await _startApp(tester);
 
     // Seed one student: achievements always attach to the registry.
     await tester.tap(find.text('+ Add Student').first);

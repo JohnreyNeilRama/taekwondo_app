@@ -5,6 +5,7 @@ import '../models/student.dart';
 import '../theme/app_theme.dart';
 import '../widgets/award_chip.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/student_avatar.dart';
 import 'student_picker_screen.dart';
 
 /// Floating form for one achievement record: student, date, event and award.
@@ -57,11 +58,17 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
   void initState() {
     super.initState();
     final initial = widget.initial;
+    // In edit mode the record carries the `students.id` it belongs to, which is
+    // what keeps the saved award attached to the same registry row.
     _student =
         widget.student ??
         (initial == null
             ? null
-            : Student(name: initial.studentName, studentNo: initial.studentNo));
+            : Student(
+                id: initial.studentId,
+                name: initial.studentName,
+                studentNo: initial.studentNo,
+              ));
     _date = _parse(initial?.date ?? '');
     _eventController.text = initial?.event ?? '';
     // Keeps Save disabled until the event is described.
@@ -120,10 +127,19 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
 
   void _save() {
     final student = _student;
-    if (student == null || !_canSave) return;
+    // The form only ever offers students read from the registry, so the id is
+    // set: it is what attaches the award to an existing registry row instead of
+    // creating a second copy of the student.
+    final studentId = student?.id;
+    if (student == null || studentId == null || !_canSave) return;
     Navigator.of(context).pop(
       AchievementRecord(
-        id: widget.initial?.id ?? _newId(),
+        // Keeping the id saves over the record being edited; a new record has
+        // none until the database inserts it.
+        id: widget.initial?.id,
+        studentId: studentId,
+        // Display only: the saved record reads the number and the name from
+        // the registry itself.
         studentNo: student.studentNo,
         studentName: student.name,
         date: _date == null ? '' : _format(_date!),
@@ -133,8 +149,6 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
     );
   }
 
-  /// Ids only have to be unique inside this device achievement file.
-  static String _newId() => DateTime.now().microsecondsSinceEpoch.toString();
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -212,22 +226,11 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
     final student = _student;
     final content = Row(
       children: [
-        Container(
-          width: 38,
-          height: 38,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.iconCircle,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            student?.initials ?? '?',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: AppColors.muted,
-            ),
-          ),
+        StudentAvatar(
+          student: student,
+          size: 38,
+          borderRadius: 10,
+          initialsFontSize: 13,
         ),
         const SizedBox(width: 12),
         Expanded(

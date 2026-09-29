@@ -8,16 +8,15 @@ import '../theme/app_theme.dart';
 import '../widgets/award_chip.dart';
 import '../widgets/brand_header.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/search_field.dart';
+import '../widgets/student_avatar.dart';
 import 'achievement_detail_screen.dart';
-import 'achievement_form_dialog.dart';
 
 /// Achievement records, listed one card per student.
 ///
 /// The list is the registry itself: every student of the Students page shows up
 /// here, including the ones without awards yet, and tapping a card opens that
-/// student records. "Add Student" never creates a student: it opens the
-/// floating achievement form, which picks the student from the existing
-/// registry.
+/// student records, where awards are added, edited and deleted.
 class AchievementScreen extends StatefulWidget {
   const AchievementScreen({super.key, this.visits = 0});
 
@@ -70,42 +69,18 @@ class _AchievementScreenState extends State<AchievementScreen> {
         _achievementStorage.loadRecords(),
       ]);
       if (!mounted) return;
-      final students = results[0] as List<Student>;
-      final records = (results[1] as List<AchievementRecord>)
-          // Keep names in sync with the registry, so a renamed student is
-          // reflected on their awards immediately.
-          .map(
-            (r) => r.copyWith(
-              studentName: _nameFor(students, r.studentNo) ?? r.studentName,
-            ),
-          )
-          .toList();
       setState(() {
-        _students = students;
-        _records = records;
+        _students = results[0] as List<Student>;
+        // Each record arrives with the registry number and the current name of
+        // its student filled in by the database JOIN, so a rename needs no
+        // synchronising here.
+        _records = results[1] as List<AchievementRecord>;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
       _toast('Could not load achievements from this device.');
-    }
-  }
-
-  static String? _nameFor(List<Student> students, String studentNo) {
-    for (final student in students) {
-      if (student.studentNo == studentNo) return student.name;
-    }
-    return null;
-  }
-
-  /// Persists the current records, surfacing failures instead of dropping the
-  /// change silently.
-  Future<void> _persist() async {
-    try {
-      await _achievementStorage.saveRecords(_records);
-    } catch (_) {
-      _toast('Could not save the achievement. Please try again.');
     }
   }
 
@@ -117,54 +92,25 @@ class _AchievementScreenState extends State<AchievementScreen> {
   }
 
   /// This student records, as handed to the detail screen.
-  List<AchievementRecord> _recordsFor(String studentNo) => [
+  List<AchievementRecord> _recordsFor(int? studentId) => [
     for (final record in _records)
-      if (record.studentNo == studentNo) record,
+      if (record.studentId == studentId) record,
   ];
-
-  /// Merges the slice edited on the detail screen back into the full list and
-  /// saves it.
-  Future<void> _replaceRecordsFor(
-    String studentNo,
-    List<AchievementRecord> records,
-  ) async {
-    setState(() {
-      _records = [
-        for (final record in _records)
-          if (record.studentNo != studentNo) record,
-        ...records,
-      ];
-    });
-    await _persist();
-  }
-
-  /// Opens the floating achievement form. The student is chosen inside the
-  /// form from the existing registry; no student is ever created here.
-  Future<void> _addAchievement() async {
-    final saved = await AchievementFormDialog.show(context);
-    if (saved == null || !mounted) return;
-    setState(() => _records = _upsert(saved));
-    await _persist();
-    _toast('Achievement saved for ${saved.studentName}');
-  }
-
-  /// Replaces an edited record in place, or appends a new one.
-  List<AchievementRecord> _upsert(AchievementRecord saved) {
-    final index = _records.indexWhere((r) => r.id == saved.id);
-    if (index == -1) return [..._records, saved];
-    return [..._records]..[index] = saved;
-  }
 
   /// Opens one student records, handing the detail screen only that student
   /// slice of the achievements.
+  ///
+  /// That screen saves each add, edit and delete on its own and calls back
+  /// through [AchievementDetailScreen.onChanged], which re-reads this list.
   Future<void> _openStudent(Student student) async {
+    final studentId = student.id;
+    if (studentId == null) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => AchievementDetailScreen(
           student: student,
-          records: _recordsFor(student.studentNo),
-          onChanged: (records) =>
-              _replaceRecordsFor(student.studentNo, records),
+          records: _recordsFor(studentId),
+          onChanged: _load,
         ),
       ),
     );
@@ -207,9 +153,8 @@ class _AchievementScreenState extends State<AchievementScreen> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 12),
-              // The search box sits where the medal filter used to be, on the
-              // same row as the Add Student action.
-              _searchAndAddRow(),
+              // The search box leads the list.
+              _searchBox(),
               const SizedBox(height: 20),
               const Text(
                 'List of Students',
@@ -250,7 +195,7 @@ class _AchievementScreenState extends State<AchievementScreen> {
                 for (final student in results)
                   _StudentCard(
                     student: student,
-                    records: _recordsFor(student.studentNo),
+                    records: _recordsFor(student.id),
                     onTap: () => _openStudent(student),
                   ),
             ],
@@ -260,73 +205,25 @@ class _AchievementScreenState extends State<AchievementScreen> {
     );
   }
 
-  /// Search box and the Add Student action on a single row, in the place the
-  /// medal filter used to occupy: the search field now leads the list.
-  Widget _searchAndAddRow() {
+  /// Full-width search box at the top of the list.
+  Widget _searchBox() {
     final hasQuery = _query.trim().isNotEmpty;
-    return Row(
-      children: [
-        Expanded(
-          child: SizedBox(
-            height: 44,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _query = value),
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Search name, nickname...',
-                hintStyle: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.muted,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                suffixIcon: hasQuery
-                    ? IconButton(
-                        tooltip: 'Clear search',
-                        icon: const Icon(
-                          Icons.close,
-                          size: 18,
-                          color: AppColors.muted,
-                        ),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _query = '');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: AppColors.surface,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 10),
-        FilledButton(
-          onPressed: _addAchievement,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 44),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-          ),
-          child: const Text('+ Add Student'),
-        ),
-      ],
+    return AppSearchField(
+      controller: _searchController,
+      hintText: 'Search name, nickname...',
+      onChanged: (value) => setState(() => _query = value),
+      hasQuery: hasQuery,
+      onClear: () {
+        _searchController.clear();
+        setState(() => _query = '');
+      },
     );
   }
 }
 
-/// One student card, styled after the designed achievement list: square avatar
-/// with initials, name, nickname, `TKD-####` badge and the medals the student
-/// already holds.
+/// One student card, styled after the designed achievement list: the saved
+/// 1 x 1 picture (the initials until one is uploaded), name, nickname,
+/// `TKD-####` badge and the medals the student already holds.
 class _StudentCard extends StatelessWidget {
   const _StudentCard({
     required this.student,
@@ -369,22 +266,11 @@ class _StudentCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 52,
-              height: 52,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.iconCircle,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                student.initials,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.muted,
-                ),
-              ),
+            StudentAvatar(
+              student: student,
+              size: 52,
+              borderRadius: 14,
+              initialsFontSize: 16,
             ),
             const SizedBox(width: 14),
             Expanded(

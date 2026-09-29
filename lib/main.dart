@@ -9,6 +9,7 @@ import 'screens/data_transfer_screen.dart';
 import 'screens/promotion_screen.dart';
 import 'screens/students_screen.dart';
 import 'services/app_database.dart';
+import 'services/legacy_json_import.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -19,11 +20,12 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  final db = await AppDatabase.instance.database;
-  debugPrint('DB tables: ${await db.rawQuery(
-    "SELECT name FROM sqlite_master WHERE type = 'table'",
-  )}');
-  debugPrint('Foreign keys: ${await db.rawQuery('PRAGMA foreign_keys')}');
+  // Open (and on a brand new device create) the database before the first
+  // screen asks for it, then bring across the records the versions before the
+  // database saved as JSON files. On a phone there are none, and the import
+  // simply does nothing.
+  await AppDatabase.instance.database;
+  await LegacyJsonImporter().importIfNeeded();
 
   runApp(const TkdApp());
 }
@@ -53,8 +55,9 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
   /// Bumped on every destination change. The [IndexedStack] keeps all four
-  /// screens alive, so a screen that reads saved files (the Achievement list)
-  /// uses this signal to refresh each time the user comes back to it.
+  /// screens alive, so a screen that reads saved records (the Promotion and
+  /// Achievement lists) uses this signal to refresh each time the user comes
+  /// back to it.
   int _visits = 0;
 
   @override
@@ -64,7 +67,7 @@ class _HomeShellState extends State<HomeShell> {
         index: _index,
         children: [
           const StudentsScreen(),
-          const PromotionScreen(),
+          PromotionScreen(visits: _visits),
           AchievementScreen(visits: _visits),
           const DataTransferScreen(),
         ],

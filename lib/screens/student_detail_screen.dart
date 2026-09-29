@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/student.dart';
 import '../theme/app_theme.dart';
+import '../widgets/student_avatar.dart';
 import 'add_student_screen.dart';
 
 /// Read-only view of one student's full information sheet.
@@ -119,17 +120,13 @@ class StudentDetailScreen extends StatelessWidget {
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => Navigator.of(context).maybePop(),
               ),
-              CircleAvatar(
-                radius: 20,
+              StudentAvatar(
+                student: student,
+                size: 40,
+                shape: BoxShape.circle,
                 backgroundColor: AppColors.red,
-                child: Text(
-                  student.initials,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                initialsColor: Colors.white,
+                initialsFontSize: 13,
               ),
               const SizedBox(width: 12),
               Expanded(

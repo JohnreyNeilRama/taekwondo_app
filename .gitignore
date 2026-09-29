@@ -46,3 +46,23 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Debug output from test runs
+*.err
+
+# Temporary debugging tests
+test/tmp_*.dart
+
+# AI coding tool folders (contain duplicate project copies and local metadata)
+.kilo/
+.freebuff/
+
+# Kotlin compiler cache
+.kotlin/
+
+# Local secrets and student data
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3

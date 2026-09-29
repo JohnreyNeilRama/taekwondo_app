@@ -1,8 +1,14 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
+/// The app's SQLite database: one file holding the registry, the promotion
+/// records and the achievements.
+///
+/// Everything the app saves goes through [database], so the screens and the
+/// storage classes never open a file themselves.
 class AppDatabase {
   AppDatabase._();
   static final AppDatabase instance = AppDatabase._();
@@ -10,11 +16,32 @@ class AppDatabase {
   static const String _dbName = 'tkd_app.db';
   static const int _dbVersion = 1;
 
+  /// Database to open instead of the real file. Tests set this to
+  /// [inMemoryDatabasePath] so they never touch the registry on the device;
+  /// production code leaves it null.
+  @visibleForTesting
+  static String? debugOverridePath;
+
   Future<Database>? _opening;
 
   Future<Database> get database => _opening ??= _open();
 
+  /// Closes the open database and forgets it, so the next call to [database]
+  /// starts from a brand new (empty) one. Visible for testing only.
+  @visibleForTesting
+  static Future<void> debugReset() async {
+    final opening = instance._opening;
+    instance._opening = null;
+    debugOverridePath = null;
+    if (opening != null) {
+      final open = await opening;
+      await open.close();
+    }
+  }
+
   Future<String> _resolvePath() async {
+    final override = debugOverridePath;
+    if (override != null) return override;
     if (Platform.isWindows) {
       final appData = Platform.environment['APPDATA'];
       if (appData == null) {
@@ -27,7 +54,10 @@ class AppDatabase {
 
   Future<Database> _open() async {
     final path = await _resolvePath();
-    await Directory(p.dirname(path)).create(recursive: true);
+    // A real file needs its folder; an in-memory path has none.
+    if (path != inMemoryDatabasePath) {
+      await Directory(p.dirname(path)).create(recursive: true);
+    }
 
     return openDatabase(
       path,

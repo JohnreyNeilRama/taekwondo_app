@@ -37,6 +37,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     'religion',
     'status',
     'schoolName',
+    'gradeYearCourse',
     'companyNameAddress',
     'fatherName',
     'fatherOccupation',
@@ -92,6 +93,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     'religion': student.religion,
     'status': student.status,
     'schoolName': student.schoolName,
+    'gradeYearCourse': student.gradeYearCourse,
     'companyNameAddress': student.companyNameAddress,
     'fatherName': student.fatherName,
     'fatherOccupation': student.fatherOccupation,
@@ -153,9 +155,11 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
 
     Navigator.of(context).pop(
       Student(
+        // Editing keeps the id and the registry number of the record being
+        // changed, so the database updates that row; a new student gets both
+        // from the storage layer once the form closes.
+        id: widget.initial?.id,
         name: _controllers['fullName']!.text.trim(),
-        // Editing keeps the record's registry number; new students get
-        // one stamped by the students list after the form closes.
         studentNo: widget.initial?.studentNo ?? '',
         nickname: _controllers['nickname']!.text.trim(),
         homeAddress: _controllers['homeAddress']!.text.trim(),
@@ -167,6 +171,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         sex: _sex ?? '',
         status: _controllers['status']!.text.trim(),
         schoolName: _controllers['schoolName']!.text.trim(),
+        gradeYearCourse: _controllers['gradeYearCourse']!.text.trim(),
         companyNameAddress: _controllers['companyNameAddress']!.text.trim(),
         fatherName: _controllers['fatherName']!.text.trim(),
         fatherOccupation: _controllers['fatherOccupation']!.text.trim(),
@@ -250,6 +255,11 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
                     'schoolName',
                     label: 'School Name',
                     hint: 'Enter School Name',
+                  ),
+                  _field(
+                    'gradeYearCourse',
+                    label: 'Grade / Year / Course',
+                    hint: 'Enter Grade / Year / Course',
                   ),
                   _field(
                     'companyNameAddress',
@@ -557,14 +567,10 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     }
   }
 
-  Uint8List? get _photoBytes {
-    if (_photoBase64.isEmpty) return null;
-    try {
-      return base64Decode(_photoBase64);
-    } catch (_) {
-      return null;
-    }
-  }
+  /// The picture the form is holding, as bytes the preview can draw. Decoded
+  /// with the shared helper, so the same `photo_base64` text the lists show is
+  /// what is previewed here.
+  Uint8List? get _photoBytes => Student.decodePhoto(_photoBase64);
 
   void _showPhotoError(String message) {
     if (!mounted) return;

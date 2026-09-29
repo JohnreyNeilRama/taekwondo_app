@@ -25,20 +25,26 @@ void main() {
     expect(tints.toSet(), hasLength(3));
   });
 
-  test('a record survives a JSON round trip', () {
+  test('a record survives a database round trip', () {
     const record = AchievementRecord(
-      id: '42',
-      studentNo: 'TKD-0001',
-      studentName: 'Nguyen Van A',
+      studentId: 7,
       date: '03/10/2026',
       event: 'National Tournament',
       award: 'Gold',
     );
 
-    final restored = AchievementRecord.fromJson(record.toJson());
+    // The id comes from the row and the registry number and name from the
+    // JOIN with the students table, exactly as the storage layer reads them.
+    final restored = AchievementRecord.fromMap({
+      'id': 42,
+      'student_no': 'TKD-0007',
+      'student_name': 'Nguyen Van A',
+      ...record.toMap(),
+    });
 
-    expect(restored.id, '42');
-    expect(restored.studentNo, 'TKD-0001');
+    expect(restored.id, 42);
+    expect(restored.studentId, 7);
+    expect(restored.studentNo, 'TKD-0007');
     expect(restored.studentName, 'Nguyen Van A');
     expect(restored.date, '03/10/2026');
     expect(restored.event, 'National Tournament');
@@ -46,9 +52,29 @@ void main() {
     expect(restored.medal, same(Award.gold));
   });
 
-  test('a corrupt record falls back to empty values', () {
-    final restored = AchievementRecord.fromJson(const {});
-    expect(restored.id, '');
+  test('only the stored columns are written to the row', () {
+    const record = AchievementRecord(
+      id: 42,
+      studentId: 7,
+      studentNo: 'TKD-0007',
+      studentName: 'Nguyen Van A',
+      date: '03/10/2026',
+      event: 'National Tournament',
+      award: 'Gold',
+    );
+
+    expect(record.toMap(), {
+      'student_id': 7,
+      'achievement_date': '03/10/2026',
+      'event': 'National Tournament',
+      'award': 'Gold',
+    });
+  });
+
+  test('a corrupt row falls back to empty values', () {
+    final restored = AchievementRecord.fromMap(const {});
+    expect(restored.id, isNull);
+    expect(restored.studentId, 0);
     expect(restored.studentNo, '');
     expect(restored.event, '');
     expect(restored.medal, isNull);
@@ -56,7 +82,8 @@ void main() {
 
   test('copyWith keeps the identity that links it to the student', () {
     const record = AchievementRecord(
-      id: '7',
+      id: 7,
+      studentId: 2,
       studentNo: 'TKD-0002',
       award: 'Silver',
     );
@@ -66,7 +93,8 @@ void main() {
       event: 'Regionals',
     );
 
-    expect(renamed.id, '7');
+    expect(renamed.id, 7);
+    expect(renamed.studentId, 2);
     expect(renamed.studentNo, 'TKD-0002');
     expect(renamed.award, 'Silver');
     expect(renamed.studentName, 'Tran Thi B');

@@ -5,6 +5,7 @@ import '../models/promotion_record.dart';
 import '../models/student.dart';
 import '../theme/app_theme.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/student_avatar.dart';
 
 /// Belt / promotion form. Pops with the saved [PromotionRecord].
 ///
@@ -13,7 +14,8 @@ import '../widgets/empty_state_card.dart';
 class PromotionFormScreen extends StatefulWidget {
   const PromotionFormScreen({super.key, required this.student, this.initial});
 
-  /// The existing student the record belongs to.
+  /// The existing student the record belongs to, read from the registry, so it
+  /// always carries the id the record is linked by.
   final Student student;
 
   /// Provided in edit mode to prefill the belt and date.
@@ -69,10 +71,21 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
   }
 
   void _save() {
+    final student = widget.student;
+    // The form is only ever opened for a student read from the registry, so
+    // the id is set; without one there is nothing to attach the record to.
+    final studentId = student.id;
+    if (studentId == null) return;
     Navigator.of(context).pop(
       PromotionRecord(
-        studentNo: widget.student.studentNo,
-        studentName: widget.student.name,
+        // Keeping the id saves over the record this student already has
+        // instead of adding a second one.
+        id: widget.initial?.id,
+        studentId: studentId,
+        // Display only: the saved record reads the number and the name from
+        // the registry itself.
+        studentNo: student.studentNo,
+        studentName: student.name,
         belt: _belt,
         lastPromotionDate: _date == null ? '' : _format(_date!),
       ),
@@ -162,22 +175,11 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.iconCircle,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                widget.student.initials,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.muted,
-                ),
-              ),
+            StudentAvatar(
+              student: widget.student,
+              size: 46,
+              borderRadius: 12,
+              initialsFontSize: 16,
             ),
             const SizedBox(width: 12),
             Expanded(

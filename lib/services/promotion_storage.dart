@@ -1,76 +1,58 @@
-import 'dart:convert';
-import 'dart:io';
-
 import '../models/promotion_record.dart';
+import 'app_database.dart';
 
-/// Loads and saves belt / promotion records on the device, using the same
-/// plain file I/O approach as [StudentStorage] so the promotion data lives
-/// in a sibling file next to the registry and survives restarts.
+/// Reads and writes belt / promotion records in the `promotions` table.
+///
+/// A record belongs to a student through `student_id`, and the student's
+/// registry number and name are read back from the `students` table with a
+/// JOIN — so the list always shows the current name and no copy of it can go
+/// stale. One student holds one record: saving again replaces it.
 class PromotionStorage {
-  static const String _fileName = 'promotions_v1.json';
-  static const String _dirName = 'tkd_app';
+  static const String _table = 'promotions';
 
-  /// Tests point this at a throwaway file so they never touch real data.
-  static File? debugOverrideFile;
+  /// The JOIN that adds the registry number and the current name of the
+  /// student to every promotion row.
+  static const String _selectWithStudent = '''
+SELECT p.id, p.student_id, p.belt, p.last_promotion_date,
+       s.student_no, s.name AS student_name
+FROM promotions p
+JOIN students s ON s.id = p.student_id
+''';
 
-  static File? _resolvedFile;
-
-  static File get _file {
-    final override = debugOverrideFile;
-    if (override != null) return override;
-    return _resolvedFile ??= _resolveFile();
-  }
-
-  static File _resolveFile() {
-    final env = Platform.environment;
-    final base =
-        env['APPDATA'] ??
-        _roamingFromUserProfile(env) ??
-        env['HOME'] ??
-        _stableTempBase();
-    return File(
-      '$base${Platform.pathSeparator}$_dirName'
-      '${Platform.pathSeparator}$_fileName',
-    );
-  }
-
-  /// `%USERPROFILE%\AppData\Roaming`, or null when USERPROFILE is absent.
-  static String? _roamingFromUserProfile(Map<String, String> env) {
-    final profile = env['USERPROFILE'];
-    if (profile == null || profile.isEmpty) return null;
-    return '$profile${Platform.pathSeparator}AppData'
-        '${Platform.pathSeparator}Roaming';
-  }
-
-  /// Fixed-name fallback directory inside the system temp folder, so data
-  /// written here still survives restarts.
-  static String _stableTempBase() =>
-      '${Directory.systemTemp.path}${Platform.pathSeparator}$_dirName-data';
-
-  /// Reads every saved promotion record. Returns an empty list on first
-  /// launch and never throws: unreadable data is ignored so the app can
-  /// still start.
+  /// Every saved promotion, oldest first.
   Future<List<PromotionRecord>> loadRecords() async {
-    try {
-      final file = _file;
-      if (!await file.exists()) return [];
-      final raw = await file.readAsString();
-      if (raw.trim().isEmpty) return [];
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      return [
-        for (final item in decoded)
-          PromotionRecord.fromJson(item as Map<String, dynamic>),
-      ];
-    } catch (_) {
-      return [];
-    }
+    final db = await AppDatabase.instance.database;
+    final rows = await db.rawQuery('$_selectWithStudent ORDER BY p.id');
+    return [for (final row in rows) PromotionRecord.fromMap(row)];
   }
 
-  /// Overwrites the stored promotion records with [records].
-  Future<void> saveRecords(List<PromotionRecord> records) async {
-    final file = _file;
-    await file.parent.create(recursive: true);
-    final raw = jsonEncode([for (final r in records) r.toJson()]);
-    await file.writeAsString(raw, flush: true);
+  /// Saves the promotion of one student, replacing the record that student
+  /// already has, and returns it with the id it was stored under.
+  ///
+  /// The row is looked up first and then inserted or updated: `ON CONFLICT DO
+  /// UPDATE` needs a newer SQLite than the older Android phones ship with.
+  Future<PromotionRecord> saveForStudent(PromotionRecord record) async {
+    final db = await AppDatabase.instance.database;
+    final id = await db.transaction((txn) async {
+      final existing = await txn.query(
+        _table,
+        columns: ['id'],
+        where: 'student_id = ?',
+        whereArgs: [record.studentId],
+        limit: 1,
+      );
+      if (existing.isEmpty) {
+        return txn.insert(_table, record.toMap());
+      }
+      final existingId = existing.first['id'] as int;
+      await txn.update(
+        _table,
+        record.toMap(),
+        where: 'id = ?',
+        whereArgs: [existingId],
+      );
+      return existingId;
+    });
+    return record.withId(id);
   }
 }

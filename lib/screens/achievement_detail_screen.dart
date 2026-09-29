@@ -2,16 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../models/achievement_record.dart';
 import '../models/student.dart';
+import '../services/achievement_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/award_chip.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/student_avatar.dart';
 import 'achievement_form_dialog.dart';
 
 /// One student achievement records.
 ///
-/// The screen only edits this student slice: every change is handed back
-/// through [onChanged] so the Achievement list — which owns the full set of
-/// records — can merge and save them.
+/// The screen only edits this student slice: every add, edit and delete is
+/// saved through [AchievementStorage] as its own row, then [onChanged] tells
+/// the Achievement list — which owns the full set of records — to read the
+/// saved rows again.
 class AchievementDetailScreen extends StatefulWidget {
   const AchievementDetailScreen({
     super.key,
@@ -25,8 +28,9 @@ class AchievementDetailScreen extends StatefulWidget {
   /// Only this student achievements, as loaded by the list screen.
   final List<AchievementRecord> records;
 
-  /// Called with the updated slice after every add, edit or delete.
-  final Future<void> Function(List<AchievementRecord> records) onChanged;
+  /// Called after every add, edit or delete so the list screen can re-read the
+  /// records it shows.
+  final Future<void> Function() onChanged;
 
   @override
   State<AchievementDetailScreen> createState() =>
@@ -34,6 +38,8 @@ class AchievementDetailScreen extends StatefulWidget {
 }
 
 class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
+  final AchievementStorage _storage = AchievementStorage();
+
   late List<AchievementRecord> _records = _newestFirst(widget.records);
 
   /// Newest award first: the most recent win is the one a coach looks for.
@@ -52,21 +58,35 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
     return '${parts[2]}-$month-$day';
   }
 
-  Future<void> _apply(List<AchievementRecord> records) async {
-    setState(() => _records = _newestFirst(records));
-    await widget.onChanged(_records);
+  void _toast(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
-  /// Records a new award for this student (the form is locked to them).
+  /// Records a new award for this student (the form is locked to them) and
+  /// shows the row the database inserted.
   Future<void> _add() async {
     final saved = await AchievementFormDialog.show(
       context,
       student: widget.student,
     );
     if (saved == null || !mounted) return;
-    await _apply([..._records, saved]);
+    final AchievementRecord inserted;
+    try {
+      inserted = await _storage.insert(saved);
+    } catch (_) {
+      _toast('Could not save the achievement. Please try again.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _records = _newestFirst([..._records, inserted]));
+    await widget.onChanged();
   }
 
+  /// Writes the edited award back onto the row it already has, so the other
+  /// awards of this student are left untouched.
   Future<void> _edit(AchievementRecord record) async {
     final saved = await AchievementFormDialog.show(
       context,
@@ -74,10 +94,20 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
       initial: record,
     );
     if (saved == null || !mounted) return;
-    await _apply([
-      for (final existing in _records)
-        if (existing.id == saved.id) saved else existing,
-    ]);
+    try {
+      await _storage.update(saved);
+    } catch (_) {
+      _toast('Could not save the achievement. Please try again.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _records = _newestFirst([
+        for (final existing in _records)
+          if (existing.id == saved.id) saved else existing,
+      ]);
+    });
+    await widget.onChanged();
   }
 
   Future<void> _confirmDelete(AchievementRecord record) async {
@@ -103,21 +133,23 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await _apply([
-      for (final existing in _records)
-        if (existing.id != record.id) existing,
-    ]);
-  }
-
-  /// Number of Gold / Silver / Bronze medals this student holds.
-  Map<Award, int> get _medalCounts {
-    final counts = <Award, int>{};
-    for (final record in _records) {
-      final medal = record.medal;
-      if (medal == null) continue;
-      counts[medal] = (counts[medal] ?? 0) + 1;
+    final id = record.id;
+    // A record without an id was never inserted, so there is nothing to remove.
+    if (id == null) return;
+    try {
+      await _storage.delete(id);
+    } catch (_) {
+      _toast('Could not delete the achievement. Please try again.');
+      return;
     }
-    return counts;
+    if (!mounted) return;
+    setState(() {
+      _records = [
+        for (final existing in _records)
+          if (existing.id != id) existing,
+      ];
+    });
+    await widget.onChanged();
   }
 
   @override
@@ -142,8 +174,6 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
                     message:
                         'Record ${widget.student.name} first award: pick the '
                         'date, the event and the medal.',
-                    actionLabel: 'Add Achievement',
-                    onAction: _add,
                   )
                 else
                   for (final record in _records)
@@ -207,35 +237,19 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
     );
   }
 
-  /// The student the awards belong to, with how many of each medal they hold.
+  /// The student the awards belong to: picture, name, nickname and TKD number.
   Widget _studentCard() {
-    final counts = _medalCounts;
     final nickname = widget.student.nickname;
     return SectionCard(
-      icon: Icons.person_outline,
-      title: 'Student',
-      subtitle: 'Records are linked to this registry entry',
-      showDivider: false,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
           children: [
-            Container(
-              width: 46,
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.iconCircle,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                widget.student.initials,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.muted,
-                ),
-              ),
+            StudentAvatar(
+              student: widget.student,
+              size: 46,
+              borderRadius: 12,
+              initialsFontSize: 16,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -265,19 +279,7 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
                     ),
                   ],
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      AppChip(
-                        label: widget.student.studentNo,
-                        emphasized: true,
-                      ),
-                      for (final award in Award.all)
-                        if ((counts[award] ?? 0) > 0)
-                          AwardChip(award: award, count: counts[award]),
-                    ],
-                  ),
+                  AppChip(label: widget.student.studentNo, emphasized: true),
                 ],
               ),
             ),

@@ -8,16 +8,27 @@ import '../services/student_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_header.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/search_field.dart';
+import '../widgets/student_avatar.dart';
 import 'promotion_detail_screen.dart';
 import 'promotion_form_screen.dart';
 import 'student_picker_screen.dart';
 
 /// Belt / promotion records for students already in the registry.
 ///
-/// "Add Student" never creates a student: it opens a picker over the
-/// existing registry, then a form for the belt and last promotion date.
+/// "Pending" never creates a student: it opens the list of registry students
+/// who have no belt yet, then the form for the belt and last promotion date.
+/// A student leaves Pending the moment their belt is saved, because that list
+/// is simply the registry minus the students a promotion record points at.
 class PromotionScreen extends StatefulWidget {
-  const PromotionScreen({super.key});
+  const PromotionScreen({super.key, this.visits = 0});
+
+  /// Changes every time a destination is selected in the shell. The list is
+  /// built once at app launch by the `IndexedStack`, so this signal reloads it
+  /// whenever the user comes back — with the students that were added,
+  /// renamed or deleted in the meantime. Without it the page would keep
+  /// showing the names and records it read at launch.
+  final int visits;
 
   @override
   State<PromotionScreen> createState() => _PromotionScreenState();
@@ -45,8 +56,19 @@ class _PromotionScreenState extends State<PromotionScreen> {
     _load();
   }
 
-  /// Reads both the registry and the promotion records. The student list is
-  /// only used to resolve names and to populate the picker.
+  @override
+  void didUpdateWidget(PromotionScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Silent refresh: `_load` never shows the spinner again, so switching
+    // destinations does not flash the list.
+    if (widget.visits != oldWidget.visits) _load();
+  }
+
+  /// Reads the promotion records and the registry they point at.
+  ///
+  /// Each record arrives with the registry number and the current name of its
+  /// student filled in by the database, so nothing has to be kept in sync
+  /// here.
   Future<void> _load() async {
     try {
       final results = await Future.wait([
@@ -54,23 +76,17 @@ class _PromotionScreenState extends State<PromotionScreen> {
         _studentStorage.loadStudents(),
       ]);
       if (!mounted) return;
+      final records = results[0] as List<PromotionRecord>;
       final students = results[1] as List<Student>;
-      final records = (results[0] as List<PromotionRecord>)
-          // Keep names in sync with the registry so a renamed student is
-          // reflected on their promotion record immediately.
-          .map(
-            (r) => r.copyWith(
-              studentName: _nameFor(students, r.studentNo) ?? r.studentName,
-              // Records saved before the grade-based curriculum keep their
-              // original belt name; mapping it here keeps them on the right
-              // Quick Card and prefills the form correctly when edited.
-              belt: BeltCatalog.normalize(r.belt),
-            ),
-          )
-          .toList();
       setState(() {
         _students = students;
-        _records = records;
+        _records = [
+          for (final record in records)
+            // Records saved before the grade-based curriculum keep their
+            // original belt name; mapping it here keeps them on the right
+            // Quick Card and prefills the form correctly when edited.
+            record.copyWith(belt: BeltCatalog.normalize(record.belt)),
+        ];
         _loading = false;
       });
     } catch (_) {
@@ -80,21 +96,18 @@ class _PromotionScreenState extends State<PromotionScreen> {
     }
   }
 
-  static String? _nameFor(List<Student> students, String studentNo) {
-    for (final student in students) {
-      if (student.studentNo == studentNo) return student.name;
-    }
-    return null;
-  }
-
-  /// Persists the current records, surfacing failures instead of dropping
-  /// the change silently.
-  Future<void> _persist() async {
+  /// Saves the promotion of one student and re-reads the list, so what is on
+  /// screen is exactly what is stored. Returns false when the save failed, and
+  /// the message has already been shown.
+  Future<bool> _saveRecord(PromotionRecord record) async {
     try {
-      await _promotionStorage.saveRecords(_records);
+      await _promotionStorage.saveForStudent(record);
     } catch (_) {
       _toast('Could not save the promotion record. Please try again.');
+      return false;
     }
+    await _load();
+    return true;
   }
 
   void _toast(String message) {
@@ -104,20 +117,34 @@ class _PromotionScreenState extends State<PromotionScreen> {
     );
   }
 
-  /// Picks an existing student, then records their belt information.
-  Future<void> _addRecord() async {
-    // The picker loads the registry itself, so this push is synchronous and
-    // the screen always shows the current Students data — even for students
-    // added after launch, long after this screen was built by the
-    // `IndexedStack`.
+  /// The students who still need a belt: everyone in the registry that no
+  /// promotion record points at.
+  ///
+  /// The test is the database link itself — `promotions.student_id` — so a
+  /// student turns up here as soon as they are added on the Students page and
+  /// leaves as soon as their belt is saved. Nothing extra is stored, and the
+  /// same student row is the one the belt is recorded against.
+  List<Student> get _pendingStudents => [
+    for (final student in _students)
+      if (_recordForStudent(student.id) == null) student,
+  ];
+
+  /// Picks a student who has no belt yet, then records their belt information.
+  Future<void> _assignPendingBelt() async {
+    // The picker reads the registry and the promotion records itself, so this
+    // push is synchronous and the list always shows the current Students data
+    // — even for students added after launch, long after this screen was built
+    // by the `IndexedStack`.
     final student = await Navigator.of(context).push<Student>(
-      MaterialPageRoute(builder: (_) => const StudentPickerScreen()),
+      MaterialPageRoute(
+        builder: (_) => const StudentPickerScreen(pendingOnly: true),
+      ),
     );
     if (student == null || !mounted) return;
 
     // A student can only hold one promotion record; selecting an existing
     // record opens it for editing instead of adding a duplicate.
-    final existing = _recordFor(student.studentNo);
+    final existing = _recordForStudent(student.id);
     final saved = await Navigator.of(context).push<PromotionRecord>(
       MaterialPageRoute(
         builder: (_) =>
@@ -125,15 +152,7 @@ class _PromotionScreenState extends State<PromotionScreen> {
       ),
     );
     if (saved == null || !mounted) return;
-    setState(() {
-      final index = _records.indexWhere((r) => r.studentNo == saved.studentNo);
-      if (index == -1) {
-        _records = [..._records, saved];
-      } else {
-        _records = [..._records]..[index] = saved;
-      }
-    });
-    await _persist();
+    if (!await _saveRecord(saved)) return;
     _toast(
       existing == null
           ? 'Promotion saved for ${student.name}'
@@ -141,9 +160,10 @@ class _PromotionScreenState extends State<PromotionScreen> {
     );
   }
 
-  PromotionRecord? _recordFor(String studentNo) {
+  /// The promotion record of one student, or null while they have none.
+  PromotionRecord? _recordForStudent(int? studentId) {
     for (final record in _records) {
-      if (record.studentNo == studentNo) return record;
+      if (record.studentId == studentId) return record;
     }
     return null;
   }
@@ -155,28 +175,26 @@ class _PromotionScreenState extends State<PromotionScreen> {
     );
     if (result == null || !mounted) return;
 
-    final student =
-        _studentFor(result.studentNo) ??
-        Student(name: result.studentName, studentNo: result.studentNo);
+    final student = _studentFor(result.studentId);
+    if (student == null) {
+      // The student is no longer in the registry, so the record went with
+      // them; re-reading drops it from the list.
+      await _load();
+      return;
+    }
     final saved = await Navigator.of(context).push<PromotionRecord>(
       MaterialPageRoute(
         builder: (_) => PromotionFormScreen(student: student, initial: result),
       ),
     );
     if (saved == null || !mounted) return;
-    setState(() {
-      final index = _records.indexWhere((r) => r.studentNo == saved.studentNo);
-      if (index != -1) {
-        _records = [..._records]..[index] = saved;
-      }
-    });
-    await _persist();
+    if (!await _saveRecord(saved)) return;
     _toast('Promotion updated');
   }
 
-  Student? _studentFor(String studentNo) {
+  Student? _studentFor(int studentId) {
     for (final student in _students) {
-      if (student.studentNo == studentNo) return student;
+      if (student.id == studentId) return student;
     }
     return null;
   }
@@ -196,8 +214,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 16),
-              // The Quick Cards always sit above the search box and the Add
-              // Student button, so all six belt colours stay visible even
+              // The Quick Cards always sit above the search box and the
+              // Pending button, so all six belt colours stay visible even
               // with no students and no promotion records yet.
               _beltSummary(),
               const SizedBox(height: 16),
@@ -207,7 +225,7 @@ class _PromotionScreenState extends State<PromotionScreen> {
                   child: Center(child: CircularProgressIndicator()),
                 )
               else ...[
-                _searchAndAddRow(),
+                _searchAndPendingRow(),
                 const SizedBox(height: 16),
                 if (results.isEmpty)
                   EmptyStateCard(
@@ -222,8 +240,8 @@ class _PromotionScreenState extends State<PromotionScreen> {
                                     'then record their belt here.'
                               : 'Select a student from your registry to record '
                                     'their current belt and last promotion date.'),
-                    actionLabel: _query.trim().isEmpty ? 'Add Student' : null,
-                    onAction: _addRecord,
+                    actionLabel: _query.trim().isEmpty ? 'Pending' : null,
+                    onAction: _assignPendingBelt,
                   )
                 else
                   for (final group in _grouped(results)) ...[
@@ -234,7 +252,7 @@ class _PromotionScreenState extends State<PromotionScreen> {
                     for (final record in group.records)
                       _RecordCard(
                         record: record,
-                        student: _studentFor(record.studentNo),
+                        student: _studentFor(record.studentId),
                         onTap: () => _openRecord(record),
                       ),
                   ],
@@ -318,62 +336,33 @@ class _PromotionScreenState extends State<PromotionScreen> {
     );
   }
 
-  /// Search field and the Add Student button on a single row.
-  Widget _searchAndAddRow() {
+  /// Search field and the Pending button on a single row.
+  Widget _searchAndPendingRow() {
     return Row(
       children: [
         Expanded(
-          child: SizedBox(
-            height: 44,
-            child: TextField(
-              controller: _searchController,
-              onChanged: (value) => setState(() => _query = value),
-              decoration: InputDecoration(
-                hintText: 'Search name, nickname...',
-                hintStyle: const TextStyle(
-                  fontSize: 13,
-                  color: AppColors.muted,
-                ),
-                prefixIcon: const Icon(
-                  Icons.search,
-                  size: 20,
-                  color: AppColors.muted,
-                ),
-                suffixIcon: _query.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Clear search',
-                        icon: const Icon(
-                          Icons.close,
-                          size: 18,
-                          color: AppColors.muted,
-                        ),
-                        onPressed: () {
-                          _searchController.clear();
-                          setState(() => _query = '');
-                        },
-                      ),
-                filled: true,
-                fillColor: AppColors.surface,
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.border),
-                ),
-              ),
-            ),
+          child: AppSearchField(
+            controller: _searchController,
+            hintText: 'Search name, nickname...',
+            onChanged: (value) => setState(() => _query = value),
+            hasQuery: _query.isNotEmpty,
+            onClear: () {
+              _searchController.clear();
+              setState(() => _query = '');
+            },
           ),
         ),
         const SizedBox(width: 10),
         FilledButton.icon(
-          onPressed: _addRecord,
+          onPressed: _assignPendingBelt,
           style: FilledButton.styleFrom(
             minimumSize: const Size(0, 44),
             padding: const EdgeInsets.symmetric(horizontal: 14),
           ),
-          icon: const Icon(Icons.add, size: 18),
-          label: const Text('Add Student'),
+          icon: const Icon(Icons.pending_actions, size: 18),
+          // The count is how many students are waiting for a belt, so the
+          // button reads as the Pending list it opens.
+          label: Text('Pending (${_pendingStudents.length})'),
         ),
       ],
     );
@@ -515,22 +504,11 @@ class _RecordCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.iconCircle,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Text(
-                student?.initials ?? '?',
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.muted,
-                ),
-              ),
+            StudentAvatar(
+              student: student,
+              size: 48,
+              borderRadius: 14,
+              initialsFontSize: 15,
             ),
             const SizedBox(width: 14),
             Expanded(

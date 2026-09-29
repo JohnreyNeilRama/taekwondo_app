@@ -5,6 +5,8 @@ import '../services/student_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/brand_header.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/search_field.dart';
+import '../widgets/student_avatar.dart';
 import 'add_student_screen.dart';
 import 'student_detail_screen.dart';
 
@@ -34,33 +36,19 @@ class _StudentsScreenState extends State<StudentsScreen> {
     super.dispose();
   }
 
-  /// Restores the registry saved on the device so records survive
-  /// app restarts. Never leaves the screen stuck on the loading
-  /// spinner: storage failures show a message instead.
+  /// Reads the registry from the database so records survive app restarts.
+  /// Never leaves the screen stuck on the loading spinner: a database failure
+  /// shows a message instead.
   Future<void> _loadStudents() async {
     try {
       final students = await _storage.loadStudents();
       if (!mounted) return;
-      // Stamp registry numbers onto records saved before numbering
-      // existed, so every card can show its TKD badge.
-      var next = _maxStudentNo(students) + 1;
-      var changed = false;
-      final numbered = <Student>[];
-      for (final student in students) {
-        if (student.studentNo.isEmpty) {
-          changed = true;
-          numbered.add(student.withStudentNo(_formatStudentNo(next++)));
-        } else {
-          numbered.add(student);
-        }
-      }
       setState(() {
         _students
           ..clear()
-          ..addAll(numbered);
+          ..addAll(students);
         _loading = false;
       });
-      if (changed) await _persist();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
@@ -75,21 +63,17 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
-  /// Persists the current registry, surfacing failures instead of
-  /// silently dropping them.
-  Future<void> _persist() async {
-    try {
-      await _storage.saveStudents(_students);
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Could not save changes to this device. Please try again.',
-          ),
+  /// Tells the user a change could not be saved, instead of dropping it
+  /// silently.
+  void _saveFailed() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Could not save changes to this device. Please try again.',
         ),
-      );
-    }
+      ),
+    );
   }
 
   List<Student> get _results {
@@ -103,16 +87,21 @@ class _StudentsScreenState extends State<StudentsScreen> {
     return _students.where(matches).toList();
   }
 
+  /// Opens the information sheet for a new student and saves what comes back.
+  /// The database mints the registry number and returns the saved record, so
+  /// the card shows the id every later change goes through.
   Future<void> _addStudent() async {
     final student = await Navigator.of(context).push<Student>(
       MaterialPageRoute(builder: (_) => const AddStudentScreen()),
     );
     if (student == null || !mounted) return;
-    final numbered = student.studentNo.isEmpty
-        ? student.withStudentNo(_formatStudentNo(_maxStudentNo(_students) + 1))
-        : student;
-    setState(() => _students.add(numbered));
-    await _persist();
+    try {
+      final saved = await _storage.insert(student);
+      if (!mounted) return;
+      setState(() => _students.add(saved));
+    } catch (_) {
+      _saveFailed();
+    }
   }
 
   /// Opens the detail screen and applies whatever came back: an
@@ -124,11 +113,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
     if (result == null || !mounted) return;
     if (result is Student) {
-      final index = _students.indexOf(student);
-      if (index != -1) {
-        setState(() => _students[index] = result);
-        await _persist();
-      }
+      await _applyEdit(result);
     } else if (result == 'delete') {
       // The detail screen has already obtained delete confirmation,
       // so no second dialog is shown here.
@@ -143,11 +128,23 @@ class _StudentsScreenState extends State<StudentsScreen> {
       MaterialPageRoute(builder: (_) => AddStudentScreen(initial: student)),
     );
     if (updated == null || !mounted) return;
-    final index = _students.indexOf(student);
-    if (index != -1) {
-      setState(() => _students[index] = updated);
-      await _persist();
+    await _applyEdit(updated);
+  }
+
+  /// Writes an edited record back through the database and shows it on the
+  /// card. Students are matched by id rather than by object identity, so the
+  /// right row is updated even after a rename.
+  Future<void> _applyEdit(Student updated) async {
+    final index = _students.indexWhere((s) => s.id == updated.id);
+    if (index == -1) return;
+    try {
+      await _storage.update(updated);
+    } catch (_) {
+      _saveFailed();
+      return;
     }
+    if (!mounted) return;
+    setState(() => _students[index] = updated);
   }
 
   Future<bool> _confirmDelete(Student student) async {
@@ -174,14 +171,26 @@ class _StudentsScreenState extends State<StudentsScreen> {
     return confirmed == true;
   }
 
-  /// Removes [student] from the list, persists the change and offers
-  /// an Undo snackbar that restores the record at its old position.
+  /// Removes [student] from the registry and offers an Undo snackbar that puts
+  /// them back.
+  ///
+  /// The database also takes the student's promotion record and achievements
+  /// with the row (the foreign keys cascade), so the storage layer hands back
+  /// a snapshot of everything they owned: that snapshot is what Undo restores,
+  /// with the original id and registry number.
   Future<void> _performDelete(Student student) async {
-    final index = _students.indexOf(student);
-    if (index == -1) return;
-    setState(() => _students.removeAt(index));
-    await _persist();
+    final id = student.id;
+    final index = _students.indexWhere((s) => s.id == id);
+    if (id == null || index == -1) return;
+    final DeletedStudent deleted;
+    try {
+      deleted = await _storage.delete(id);
+    } catch (_) {
+      _saveFailed();
+      return;
+    }
     if (!mounted) return;
+    setState(() => _students.removeAt(index));
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
@@ -189,15 +198,22 @@ class _StudentsScreenState extends State<StudentsScreen> {
           content: Text('${student.name} deleted'),
           action: SnackBarAction(
             label: 'Undo',
-            onPressed: () async {
-              if (!mounted) return;
-              final insertAt = index.clamp(0, _students.length);
-              setState(() => _students.insert(insertAt, student));
-              await _persist();
-            },
+            onPressed: () => _undoDelete(deleted),
           ),
         ),
       );
+  }
+
+  /// Puts a deleted student, their promotion record and their achievements
+  /// back, then re-reads the registry so the list is exactly what is saved.
+  Future<void> _undoDelete(DeletedStudent deleted) async {
+    try {
+      await _storage.restore(deleted);
+    } catch (_) {
+      _saveFailed();
+      return;
+    }
+    await _loadStudents();
   }
 
   void _clearSearch() {
@@ -205,21 +221,32 @@ class _StudentsScreenState extends State<StudentsScreen> {
     setState(() => _query = '');
   }
 
-  /// Highest numeric part of the stored `TKD-####` numbers; 0 when none
-  /// of the records carries one yet.
-  int _maxStudentNo(List<Student> students) {
-    var max = 0;
-    for (final student in students) {
-      final match = RegExp(r'^TKD-(\d+)$').firstMatch(student.studentNo);
-      if (match == null) continue;
-      final value = int.tryParse(match.group(1)!);
-      if (value != null && value > max) max = value;
-    }
-    return max;
+  /// Search box and the Add Student action on a single row, styled and laid
+  /// out the same way as the Achievement page's search + add row.
+  Widget _searchAndAddRow(bool hasQuery) {
+    return Row(
+      children: [
+        Expanded(
+          child: AppSearchField(
+            controller: _searchController,
+            hintText: 'Search name, nickname, school, contact',
+            onChanged: (value) => setState(() => _query = value),
+            hasQuery: hasQuery,
+            onClear: _clearSearch,
+          ),
+        ),
+        const SizedBox(width: 10),
+        FilledButton(
+          onPressed: _addStudent,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+          ),
+          child: const Text('+ Add Student'),
+        ),
+      ],
+    );
   }
-
-  String _formatStudentNo(int number) =>
-      'TKD-${number.toString().padLeft(4, '0')}';
 
   @override
   Widget build(BuildContext context) {
@@ -232,70 +259,26 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
     return Column(
       children: [
-        BrandHeader(
-          bottom: TextField(
-            controller: _searchController,
-            onChanged: (value) => setState(() => _query = value),
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: 'Search name, nickname, school, contact',
-              hintStyle: const TextStyle(color: AppColors.muted),
-              prefixIcon: const Icon(Icons.search, color: AppColors.black),
-              suffixIcon: hasQuery
-                  ? IconButton(
-                      tooltip: 'Clear search',
-                      icon: const Icon(Icons.close, color: AppColors.muted),
-                      onPressed: _clearSearch,
-                    )
-                  : null,
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-          ),
-        ),
+        const BrandHeader(),
         Expanded(
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'All Students',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          countLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton(
-                    onPressed: _addStudent,
-                    child: const Text('+ Add Student'),
-                  ),
-                ],
+              const Text(
+                'All Students',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
               ),
+              const SizedBox(height: 2),
+              Text(
+                countLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+              const SizedBox(height: 12),
+              // The search box sits at the bottom of the header block, beside
+              // the Add Student action, matching the Achievement page layout.
+              _searchAndAddRow(hasQuery),
               const SizedBox(height: 16),
               if (_loading)
                 const Padding(
@@ -313,7 +296,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
               else
                 for (final student in results)
                   Dismissible(
-                    key: ValueKey(student),
+                    key: ValueKey(student.id),
                     direction: DismissDirection.endToStart,
                     confirmDismiss: (_) => _confirmDelete(student),
                     onDismissed: (_) => _performDelete(student),
@@ -344,9 +327,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 }
 
-/// Card for one student, styled after the designed registry list:
-/// square avatar with initials, name, nickname, `TKD-####` badge,
-/// school / contact rows and View / Edit actions.
+/// Card for one student, styled after the designed registry list: the saved
+/// 1 x 1 picture (the initials until one is uploaded), name, nickname,
+/// `TKD-####` badge, school / contact rows and View / Edit actions.
 class _StudentCard extends StatelessWidget {
   const _StudentCard({
     required this.student,
@@ -379,22 +362,11 @@ class _StudentCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 56,
-                  height: 56,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: AppColors.iconCircle,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    student.initials,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.muted,
-                    ),
-                  ),
+                StudentAvatar(
+                  student: student,
+                  size: 56,
+                  borderRadius: 14,
+                  initialsFontSize: 18,
                 ),
                 const SizedBox(width: 14),
                 Expanded(

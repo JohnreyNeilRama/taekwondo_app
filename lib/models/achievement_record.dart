@@ -46,31 +46,39 @@ class Award {
 
 /// One achievement won by a student.
 ///
-/// Achievements live in their own list and are keyed by [studentNo], so the
-/// many records of a student all point at the single student on the Students
-/// page without ever duplicating or altering that registry entry.
+/// A student can hold many of these, each linked by [studentId] — the
+/// `students.id` primary key — so all the awards of one student follow the
+/// single registry entry and a rename can never duplicate it. [studentNo] and
+/// [studentName] are read from the registry by the storage layer's JOIN: they
+/// are shown on screen but never saved on this record.
 class AchievementRecord {
   const AchievementRecord({
-    required this.id,
-    required this.studentNo,
+    this.id,
+    required this.studentId,
+    this.studentNo = '',
     this.studentName = '',
     this.date = '',
     this.event = '',
     this.award = '',
   });
 
-  /// Unique id, so one student can hold many achievements and each of them
-  /// can still be edited, replaced or deleted on its own.
-  final String id;
+  /// Primary key of the `achievements` row; null for a record the database has
+  /// not saved yet. The id is what lets one student hold many achievements and
+  /// still have each of them edited, replaced or deleted on its own.
+  final int? id;
 
-  /// Registry number of the student who won it, e.g. `TKD-0001`.
+  /// The `students.id` this achievement belongs to.
+  final int studentId;
+
+  /// Registry number of the student who won it, e.g. `TKD-0001`, filled by the
+  /// JOIN from the registry.
   final String studentNo;
 
-  /// Cached name, so a record still reads sensibly if the student is renamed.
-  /// Refreshed from the registry whenever records are loaded.
+  /// The student's name, filled by the JOIN from the registry.
   final String studentName;
 
   /// Stored as `MM/DD/YYYY` to match `Student.birthDate`.
+  /// Saved in the `achievement_date` column.
   final String date;
 
   /// The event the achievement was won at, e.g. `National Tournament`.
@@ -82,6 +90,17 @@ class AchievementRecord {
   /// The medal for [award], or null when nothing valid is stored.
   Award? get medal => Award.fromLabel(award);
 
+  /// Copy of this record with the id the database assigned to it.
+  AchievementRecord withId(int id) => AchievementRecord(
+    id: id,
+    studentId: studentId,
+    studentNo: studentNo,
+    studentName: studentName,
+    date: date,
+    event: event,
+    award: award,
+  );
+
   AchievementRecord copyWith({
     String? studentName,
     String? date,
@@ -89,6 +108,7 @@ class AchievementRecord {
     String? award,
   }) => AchievementRecord(
     id: id,
+    studentId: studentId,
     studentNo: studentNo,
     studentName: studentName ?? this.studentName,
     date: date ?? this.date,
@@ -96,24 +116,25 @@ class AchievementRecord {
     award: award ?? this.award,
   );
 
-  Map<String, dynamic> toJson() => {
-    'id': id,
-    'studentNo': studentNo,
-    'studentName': studentName,
-    'date': date,
+  /// The row this record becomes in the `achievements` table: the student is
+  /// referenced by id, and the display fields are deliberately left out.
+  Map<String, Object?> toMap() => {
+    'student_id': studentId,
+    'achievement_date': date,
     'event': event,
     'award': award,
   };
 
-  /// Rebuilds a record from JSON, falling back to empty strings so a corrupt
-  /// entry can never crash the screen.
-  factory AchievementRecord.fromJson(Map<String, dynamic> json) =>
+  /// Rebuilds a record from one `achievements` row joined with its student, so
+  /// the registry number and the name always come from the registry itself.
+  factory AchievementRecord.fromMap(Map<String, Object?> map) =>
       AchievementRecord(
-        id: json['id'] as String? ?? '',
-        studentNo: json['studentNo'] as String? ?? '',
-        studentName: json['studentName'] as String? ?? '',
-        date: json['date'] as String? ?? '',
-        event: json['event'] as String? ?? '',
-        award: json['award'] as String? ?? '',
+        id: map['id'] as int?,
+        studentId: map['student_id'] as int? ?? 0,
+        studentNo: map['student_no'] as String? ?? '',
+        studentName: map['student_name'] as String? ?? '',
+        date: map['achievement_date'] as String? ?? '',
+        event: map['event'] as String? ?? '',
+        award: map['award'] as String? ?? '',
       );
 }
