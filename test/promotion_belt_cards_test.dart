@@ -4,6 +4,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:tkd_app/main.dart';
 import 'package:tkd_app/screens/security_gate.dart';
+import 'package:tkd_app/screens/students_screen.dart';
 import 'package:tkd_app/services/app_database.dart';
 
 /// The belt Quick Cards open the students of a colour.
@@ -33,6 +34,9 @@ Future<void> _startApp(WidgetTester tester) async {
     AppDatabase.debugOverridePath = inMemoryDatabasePath;
   });
   SecurityGate.debugSkipLock = true;
+  // The QR screen that opens after a student is added is not what these tests
+  // are about; it has its own test in test/student_qr_screen_test.dart.
+  StudentsScreen.debugSkipQrAfterAdd = true;
   await tester.runAsync(() => AppDatabase.instance.database);
   await tester.pumpWidget(const TkdApp());
   await _settle(tester);

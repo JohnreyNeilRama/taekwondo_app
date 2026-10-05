@@ -5,6 +5,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:tkd_app/main.dart';
 import 'package:tkd_app/models/student.dart';
 import 'package:tkd_app/screens/security_gate.dart';
+import 'package:tkd_app/screens/students_screen.dart';
 import 'package:tkd_app/services/app_database.dart';
 import 'package:tkd_app/services/student_storage.dart';
 
@@ -44,6 +45,10 @@ Future<void> _freshDatabase(WidgetTester tester) async {
   // Security Account lock is started already open. The gate itself has its own
   // tests in test/security_flow_test.dart.
   SecurityGate.debugSkipLock = true;
+  // These tests are about the registry list, so the QR screen that opens after
+  // a student is added is switched off here. It has its own test in
+  // test/student_qr_screen_test.dart.
+  StudentsScreen.debugSkipQrAfterAdd = true;
 }
 
 /// Opens the database, then builds the app on it.

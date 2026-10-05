@@ -199,6 +199,10 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         // changed, so the database updates that row; a new student gets both
         // from the storage layer once the form closes.
         id: widget.initial?.id,
+        // The student's permanent identity travels with the record, so a card
+        // updated after an edit still has the uid its QR code is made from.
+        // The storage layer never writes it back: an edit cannot change it.
+        uid: widget.initial?.uid ?? '',
         name: _controllers['fullName']!.text.trim(),
         studentNo: widget.initial?.studentNo ?? '',
         nickname: _controllers['nickname']!.text.trim(),

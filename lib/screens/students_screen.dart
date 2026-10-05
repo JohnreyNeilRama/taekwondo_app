@@ -9,6 +9,7 @@ import '../widgets/search_field.dart';
 import '../widgets/student_avatar.dart';
 import 'add_student_screen.dart';
 import 'student_detail_screen.dart';
+import 'student_qr_screen.dart';
 import 'trash_screen.dart';
 
 /// The stored name split for display and sorting: the family name and the
@@ -89,6 +90,11 @@ String displayStudentName(String fullName) {
 
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({super.key, this.visits = 0});
+
+  /// Tests that are about the registry list switch off the QR screen that opens
+  /// after a student is added, so the list is on screen as soon as the form
+  /// closes. The app never sets it.
+  static bool debugSkipQrAfterAdd = false;
 
   /// Changes every time a destination is selected in the shell. The screen is
   /// built once at app launch by the `IndexedStack`, so this signal is what
@@ -242,6 +248,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
     if (student == null || !mounted) return;
     _localWrites++;
+    Student? added;
     try {
       final saved = await _storage.insert(student);
       if (!mounted) return;
@@ -249,9 +256,20 @@ class _StudentsScreenState extends State<StudentsScreen> {
         _localWrites++;
         _students.add(saved);
       });
+      added = saved;
     } catch (_) {
       _saveFailed();
     }
+    // The student is saved: show their QR code right away, so it can be shown,
+    // printed or screenshotted before moving on. It is outside the try above on
+    // purpose, so a problem opening this screen is never reported as a failed
+    // save.
+    if (added == null || !mounted || StudentsScreen.debugSkipQrAfterAdd) return;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => StudentQrScreen(student: added!, justSaved: true),
+      ),
+    );
   }
 
   /// Opens the detail screen and applies whatever came back: an

@@ -15,7 +15,7 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const String _dbName = 'tkd_app.db';
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   /// A small key/value table for bookkeeping. Registry numbers no longer use
   /// it — `StudentStorage` keeps them sequential itself — but the table stays,
@@ -163,6 +163,8 @@ CREATE TABLE achievements (
         );
 
         await db.execute(_createMetaTable);
+        await db.execute(_createAttendanceTable);
+        await db.execute(_createAttendanceIndex);
       },
       // A phone that already holds the v1 registry is brought up to date here
       // instead of being refused, so an update never costs the owner their
@@ -198,9 +200,35 @@ CREATE TABLE achievements (
             "ALTER TABLE students ADD COLUMN uid TEXT NOT NULL DEFAULT ''",
           );
         }
+        // Version 5 adds attendance: one row per student per day, written when
+        // a student's QR code is scanned. A brand new table, so no existing
+        // record is touched.
+        if (oldVersion < 5) {
+          await db.execute(_createAttendanceTable);
+          await db.execute(_createAttendanceIndex);
+        }
       },
     );
   }
+
+  /// The attendance table, kept in one place so `onCreate` and `onUpgrade` can
+  /// never disagree about its shape. `attended_on` is the local day as
+  /// `yyyy-mm-dd`; the UNIQUE rule is what keeps a student to one check-in per
+  /// day.
+  static const String _createAttendanceTable = '''
+CREATE TABLE IF NOT EXISTS attendance (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id    INTEGER NOT NULL,
+  attended_on   TEXT    NOT NULL,
+  checked_in_at TEXT    NOT NULL,
+  UNIQUE (student_id, attended_on),
+  FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+)
+''';
+
+  static const String _createAttendanceIndex =
+      'CREATE INDEX IF NOT EXISTS idx_attendance_attended_on '
+      'ON attendance (attended_on)';
 
   /// The bookkeeping table, kept in one place so `onCreate` and `onUpgrade`
   /// can never disagree about its shape.

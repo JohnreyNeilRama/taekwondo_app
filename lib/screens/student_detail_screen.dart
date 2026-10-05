@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/student.dart';
 import '../theme/app_theme.dart';
+import '../widgets/attendance_history_card.dart';
 import '../widgets/student_avatar.dart';
 import 'add_student_screen.dart';
+import 'student_qr_screen.dart';
 
 /// Read-only view of one student's full information sheet.
 ///
@@ -42,6 +44,13 @@ class StudentDetailScreen extends StatelessWidget {
     }
   }
 
+  /// Opens this student's QR code, the one scanned to record attendance.
+  void _showQr(BuildContext context) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => StudentQrScreen(student: student)),
+    );
+  }
+
   Future<void> _edit(BuildContext context) async {
     final updated = await Navigator.of(context).push<Student>(
       MaterialPageRoute(builder: (_) => AddStudentScreen(initial: student)),
@@ -62,6 +71,13 @@ class StudentDetailScreen extends StatelessWidget {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                if (student.id != null) ...[
+                  AttendanceHistoryCard(
+                    studentId: student.id!,
+                    studentName: student.name,
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _sectionCard('STUDENT DETAILS', [
                   ('Nickname', student.nickname),
                   ('Birth Date', student.birthDate),
@@ -155,6 +171,11 @@ class StudentDetailScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                tooltip: 'QR code',
+                icon: const Icon(Icons.qr_code_2, color: Colors.white),
+                onPressed: () => _showQr(context),
               ),
               IconButton(
                 tooltip: 'Edit',

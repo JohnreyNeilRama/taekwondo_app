@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'screens/achievement_screen.dart';
+import 'screens/attendance_scanner_screen.dart';
 import 'screens/data_transfer_screen.dart';
 import 'screens/promotion_screen.dart';
 import 'screens/security_gate.dart';
@@ -52,6 +53,12 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
+  /// Position of the QR button in the bottom bar: the middle of the five slots.
+  /// It opens the attendance scanner instead of switching destination, so the
+  /// four screens keep the indexes 0..3 inside the [IndexedStack] and only the
+  /// bar positions around the button are shifted.
+  static const int _scanSlot = 2;
+
   int _index = 0;
 
   /// Bumped on every destination change. The [IndexedStack] keeps all four
@@ -98,6 +105,26 @@ class _HomeShellState extends State<HomeShell> {
     _refreshBackupReminder();
   }
 
+  /// The bar slot that is highlighted for the destination on screen: the slots
+  /// after the QR button sit one place further right.
+  int get _barIndex => _index < _scanSlot ? _index : _index + 1;
+
+  /// A tap on the bar: the middle button opens the scanner, every other slot
+  /// selects its destination.
+  void _onBarTap(int barIndex) {
+    if (barIndex == _scanSlot) {
+      _openScanner();
+      return;
+    }
+    _select(barIndex < _scanSlot ? barIndex : barIndex - 1);
+  }
+
+  Future<void> _openScanner() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const AttendanceScannerScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -116,8 +143,8 @@ class _HomeShellState extends State<HomeShell> {
           border: Border(top: BorderSide(color: AppColors.border)),
         ),
         child: BottomNavigationBar(
-          currentIndex: _index,
-          onTap: _select,
+          currentIndex: _barIndex,
+          onTap: _onBarTap,
           type: BottomNavigationBarType.fixed,
           backgroundColor: AppColors.surface,
           elevation: 0,
@@ -136,6 +163,24 @@ class _HomeShellState extends State<HomeShell> {
             const BottomNavigationBarItem(
               icon: Icon(Icons.emoji_events_outlined),
               label: 'Promotion',
+            ),
+            // The attendance scanner. Drawn as a red button so it reads as an
+            // action, not as one more page: it is never the highlighted slot.
+            BottomNavigationBarItem(
+              icon: Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  color: AppColors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.qr_code_scanner,
+                  size: 20,
+                  color: Colors.white,
+                ),
+              ),
+              label: 'Scan',
             ),
             const BottomNavigationBarItem(
               icon: Icon(Icons.workspace_premium_outlined),

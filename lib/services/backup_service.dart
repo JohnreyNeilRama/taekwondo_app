@@ -5,6 +5,7 @@ import 'package:sqflite/sqflite.dart';
 
 import 'app_database.dart';
 import 'achievement_storage.dart';
+import 'attendance_storage.dart';
 import 'promotion_storage.dart';
 import 'student_storage.dart';
 import 'student_uid.dart';
@@ -28,12 +29,16 @@ class BackupCounts {
     required this.photos,
     required this.promotions,
     required this.achievements,
+    this.attendance = 0,
   });
 
   final int students;
   final int photos;
   final int promotions;
   final int achievements;
+
+  /// Check-ins recorded by scanning a student's QR code.
+  final int attendance;
 }
 
 /// What an import did.
@@ -44,6 +49,7 @@ class ImportResult {
     required this.addedPromotions,
     required this.addedAchievements,
     required this.skipped,
+    this.addedAttendance = 0,
   });
 
   /// Students that were not on this device and have been added.
@@ -56,12 +62,18 @@ class ImportResult {
   final int addedPromotions;
   final int addedAchievements;
 
+  /// Check-ins that were not on this device and have been added.
+  final int addedAttendance;
+
   /// Rows of the file that could not be used (no name, an unknown medal, a
   /// record pointing at a student the file does not hold).
   final int skipped;
 
   bool get addedNothing =>
-      addedStudents == 0 && addedPromotions == 0 && addedAchievements == 0;
+      addedStudents == 0 &&
+      addedPromotions == 0 &&
+      addedAchievements == 0 &&
+      addedAttendance == 0;
 }
 
 /// Above this size a backup is encoded or decoded on a background isolate, so
@@ -85,7 +97,8 @@ Object? _decodeBackup(Uint8List bytes) {
 /// Exports the whole registry to one file and merges such a file back in.
 ///
 /// The backup is a single JSON document holding every row of the `students`,
-/// `promotions` and `achievements` tables, pictures included. It is written
+/// `promotions`, `achievements` and `attendance` tables, pictures included.
+/// It is written
 /// from one read transaction, so it is a consistent snapshot even if the app is
 /// used while it is being made.
 ///
@@ -97,6 +110,9 @@ class BackupService {
 
   static const Set<String> _awards = {'Gold', 'Silver', 'Bronze'};
   static const Set<String> _sexes = {'', 'Male', 'Female'};
+
+  /// The `yyyy-mm-dd` shape of an attendance day.
+  static final RegExp _dayPattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 
   /// Key the moment of the last successful export is kept under, in `app_meta`.
   /// The `backup.` prefix keeps it clear of the `security.` counters, and
@@ -133,6 +149,10 @@ class BackupService {
       ),
       achievements: await count(
         'SELECT COUNT(*) FROM achievements a '
+        "JOIN students s ON s.id = a.student_id AND s.deleted_at = ''",
+      ),
+      attendance: await count(
+        'SELECT COUNT(*) FROM attendance a '
         "JOIN students s ON s.id = a.student_id AND s.deleted_at = ''",
       ),
     );
@@ -185,6 +205,7 @@ class BackupService {
         'students': await txn.query('students', orderBy: 'id'),
         'promotions': await txn.query('promotions', orderBy: 'id'),
         'achievements': await txn.query('achievements', orderBy: 'id'),
+        'attendance': await txn.query('attendance', orderBy: 'id'),
       };
     });
     final document = <String, Object?>{
@@ -236,6 +257,9 @@ class BackupService {
     final students = _rows(decoded['students'], required: true);
     final promotions = _rows(decoded['promotions']);
     final achievements = _rows(decoded['achievements']);
+    // A backup made before attendance existed has no such table: it is simply
+    // empty, and the rest of the file imports exactly as it always did.
+    final attendance = _rows(decoded['attendance']);
 
     final db = await AppDatabase.instance.database;
     return db.transaction((txn) async {
@@ -245,6 +269,10 @@ class BackupService {
         'student_id',
       });
       final achievementColumns = await _columns(txn, 'achievements', {
+        'id',
+        'student_id',
+      });
+      final attendanceColumns = await _columns(txn, 'attendance', {
         'id',
         'student_id',
       });
@@ -379,11 +407,44 @@ class BackupService {
         addedAchievements++;
       }
 
+      // One check-in per student per day, the same rule the table enforces: a
+      // day the student already has here keeps the time it was recorded with,
+      // so importing the same file twice, or a backup that shares some scans
+      // with this device, never counts a day twice.
+      final seenDays = <String>{
+        for (final row in await txn.query(
+          'attendance',
+          columns: ['student_id', 'attended_on'],
+        ))
+          '${row['student_id']}\u0000${row['attended_on']}',
+      };
+      var addedAttendance = 0;
+      for (final row in attendance) {
+        final oldStudent = _asInt(row['student_id']);
+        final target = oldStudent == null ? null : idMap[oldStudent];
+        final clean = _clean(row, attendanceColumns);
+        final day = (clean['attended_on'] as String? ?? '').trim();
+        if (target == null || !_dayPattern.hasMatch(day)) {
+          skipped++;
+          continue;
+        }
+        if (!seenDays.add('$target\u0000$day')) continue;
+        final at = (clean['checked_in_at'] as String? ?? '').trim();
+        await txn.insert('attendance', {
+          ...clean,
+          'student_id': target,
+          'attended_on': day,
+          'checked_in_at': at.isEmpty ? '${day}T00:00:00.000' : at,
+        });
+        addedAttendance++;
+      }
+
       return ImportResult(
         addedStudents: addedStudents,
         matchedStudents: matchedStudents,
         addedPromotions: addedPromotions,
         addedAchievements: addedAchievements,
+        addedAttendance: addedAttendance,
         skipped: skipped,
       );
     }).then((result) {
@@ -394,6 +455,7 @@ class BackupService {
       StudentStorage.revision++;
       PromotionStorage.revision++;
       AchievementStorage.revision++;
+      AttendanceStorage.revision++;
       return result;
     });
   }

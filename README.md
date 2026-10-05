@@ -14,7 +14,8 @@ the device itself.
   the operating system keeps private to the app).
 - **Windows:** `%APPDATA%\tkd_app\tkd_app.db`.
 
-The database holds four tables: `students`, `promotions`, `achievements` and a
+The database holds five tables: `students`, `promotions`, `achievements`,
+`attendance` and a
 small `app_meta` key/value table. Records are linked by `students.id`, so a
 rename can never orphan or duplicate a promotion or an achievement.
 
@@ -37,6 +38,22 @@ runs `ALTER TABLE ... ADD COLUMN`.
   cloud account silently.
 - The exported backup file is also plaintext JSON (pictures included). Keep it
   somewhere you trust, and treat it like the records themselves.
+
+## Attendance (QR check-in)
+
+Every student has a QR code, shown right after they are added and from the QR
+button on their details page. It carries only the student's permanent `uid`
+(`TKD:<uid>`), so it never changes when the name or registry number does.
+
+The red QR button in the middle of the bottom bar opens the scanner. A scan
+writes one row to `attendance` (`student_id`, `attended_on`, `checked_in_at`);
+the UNIQUE (student_id, attended_on) rule keeps a second scan on the same day
+from counting twice. Where the camera is not available (Windows) or a student
+forgot their code, the keyboard button checks in by student number instead.
+
+**Attendance is not part of the JSON backup yet.** Exporting and importing
+moves students, pictures, promotions and achievements only, so attendance is
+lost if a phone is lost or the registry is restored from a backup.
 
 ## Backup and recovery
 

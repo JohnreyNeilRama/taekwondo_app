@@ -13,7 +13,7 @@ import '../widgets/empty_state_card.dart';
 /// Backup / transfer hub: export the registry to a file and import one back.
 ///
 /// The counts at the top are read from the database, and the file is the whole
-/// registry (students, pictures, promotion records and achievements) in one
+/// registry (students, pictures, promotion records, achievements and attendance) in one
 /// JSON document. Importing only ever adds records; it never changes or deletes
 /// what is already on the device.
 class DataTransferScreen extends StatefulWidget {
@@ -241,6 +241,8 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
           _plural(result.addedPromotions, 'promotion record'),
         if (result.addedAchievements > 0)
           _plural(result.addedAchievements, 'achievement'),
+        if (result.addedAttendance > 0)
+          _plural(result.addedAttendance, 'attendance record'),
       ];
       lines.add('Added ${added.join(', ')}.');
       if (result.matchedStudents > 0) {
@@ -362,6 +364,11 @@ class _TransferredList extends StatelessWidget {
             label: 'Achievements',
             detail: 'Awards, titles and milestones',
           ),
+          _TransferRow(
+            icon: Icons.event_available_outlined,
+            label: 'Attendance',
+            detail: 'Class check-ins recorded by QR scan',
+          ),
         ],
       ),
     );
@@ -452,6 +459,12 @@ class _StorageSummary extends StatelessWidget {
                 child: _StorageStat(
                   value: show(counts?.achievements),
                   label: 'Awards',
+                ),
+              ),
+              Expanded(
+                child: _StorageStat(
+                  value: show(counts?.attendance),
+                  label: 'Check-ins',
                 ),
               ),
             ],
