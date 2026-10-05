@@ -5,6 +5,7 @@ import 'dart:typed_data';
 class Student {
   const Student({
     this.id,
+    this.uid = '',
     required this.name,
     this.studentNo = '',
     this.nickname = '',
@@ -33,12 +34,23 @@ class Student {
     this.otherHobbiesSports = '',
     this.healthConditions = '',
     this.photoBase64 = '',
+    this.photoFullBase64 = '',
+    this.clearPhoto = false,
   });
 
   /// Primary key of the `students` row. Null on a record that has not been
   /// saved yet; filled in by [StudentStorage.insert] and carried through every
   /// edit, so saving a change updates that row instead of adding a new one.
   final int? id;
+
+  /// A random, permanent identity for this student, minted once when the
+  /// record is created and never changed afterwards (see `StudentUid`).
+  ///
+  /// It is what lets a backup be imported onto another device (or imported
+  /// again here) without adding a second copy of a student after a rename or a
+  /// renumbering. An empty value means "not stamped yet"; the storage layer
+  /// fills it in on the next save and on app start.
+  final String uid;
 
   final String name;
 
@@ -75,9 +87,29 @@ class Student {
   final String otherHobbiesSports;
   final String healthConditions;
 
-  /// The persisted JPG/PNG bytes, encoded as base64. Keeping this in
-  /// the student record associates the photo with the correct account.
+  /// The picture every list, header, avatar and preview draws, encoded as
+  /// base64 and kept small by [PhotoProcessor] before it is saved. Keeping the
+  /// compact copy on the student row is what associates one picture with the
+  /// correct account on every page at once.
   final String photoBase64;
+
+  /// The original picture the picker produced, at the size it was uploaded.
+  ///
+  /// It is stored beside the compact copy so the full-quality photo is never
+  /// thrown away, but no screen reads it: the lists select every column except
+  /// this one, which is what keeps a long registry cheap to open. Only the
+  /// backup file and the "shrink saved pictures" action look at it.
+  final String photoFullBase64;
+
+  /// A one-time instruction for [StudentStorage.update]: remove the saved
+  /// picture (both copies) on purpose.
+  ///
+  /// An empty [photoBase64] alone never removes anything, because it also
+  /// means "this record does not carry the picture" (a list row, or a form that
+  /// never loaded it). Only the form's explicit "Remove photo" action sets this,
+  /// and it is not stored: the copies made by [withId] and [withStudentNo] drop
+  /// it, so a later edit cannot remove a picture by accident.
+  final bool clearPhoto;
 
   /// The saved picture as the bytes an `Image` can draw, or null when this
   /// student has no picture — the screens then fall back to the initials.
@@ -121,6 +153,7 @@ class Student {
   /// layer stamps a registry number onto a freshly created student).
   Student withStudentNo(String studentNo) => Student(
     id: id,
+    uid: uid,
     name: name,
     studentNo: studentNo,
     nickname: nickname,
@@ -149,11 +182,13 @@ class Student {
     otherHobbiesSports: otherHobbiesSports,
     healthConditions: healthConditions,
     photoBase64: photoBase64,
+    photoFullBase64: photoFullBase64,
   );
 
   /// Copy of this record carrying the id the database assigned to it.
   Student withId(int id) => Student(
     id: id,
+    uid: uid,
     name: name,
     studentNo: studentNo,
     nickname: nickname,
@@ -182,13 +217,15 @@ class Student {
     otherHobbiesSports: otherHobbiesSports,
     healthConditions: healthConditions,
     photoBase64: photoBase64,
+    photoFullBase64: photoFullBase64,
   );
 
-  /// The row this record becomes in the `students` table. Every one of the 28
+  /// The row this record becomes in the `students` table. Every one of the 29
   /// sheet columns is written, so an edit can never blank a field out by
   /// leaving it out of the map.
   Map<String, Object?> toMap() => {
     if (id != null) 'id': id,
+    'uid': uid,
     'student_no': studentNo,
     'name': name,
     'nickname': nickname,
@@ -217,12 +254,14 @@ class Student {
     'other_hobbies_sports': otherHobbiesSports,
     'health_conditions': healthConditions,
     'photo_base64': photoBase64,
+    'photo_full_base64': photoFullBase64,
   };
 
   /// Rebuilds a [Student] from one `students` row. Missing or null values fall
   /// back to empty strings, so a partially filled row can never crash the app.
   factory Student.fromMap(Map<String, Object?> map) => Student(
     id: map['id'] as int?,
+    uid: _text(map['uid']),
     name: _text(map['name']),
     studentNo: _text(map['student_no']),
     nickname: _text(map['nickname']),
@@ -251,6 +290,7 @@ class Student {
     otherHobbiesSports: _text(map['other_hobbies_sports']),
     healthConditions: _text(map['health_conditions']),
     photoBase64: _text(map['photo_base64']),
+    photoFullBase64: _text(map['photo_full_base64']),
   );
 
   /// Reads one text column, tolerating null.
@@ -260,6 +300,7 @@ class Student {
   /// `students_v1.json`. Only the one-time import reads it; the database never
   /// uses it.
   Map<String, dynamic> toJson() => {
+    'uid': uid,
     'name': name,
     'studentNo': studentNo,
     'nickname': nickname,
@@ -288,12 +329,51 @@ class Student {
     'otherHobbiesSports': otherHobbiesSports,
     'healthConditions': healthConditions,
     'photoBase64': photoBase64,
+    'photoFullBase64': photoFullBase64,
   };
+
+  /// Copy of this record carrying the [uid] the storage layer minted for it.
+  /// The identity is set once and never edited, so this is only used while a
+  /// record is being created.
+  Student withUid(String uid) => Student(
+    id: id,
+    uid: uid,
+    name: name,
+    studentNo: studentNo,
+    nickname: nickname,
+    homeAddress: homeAddress,
+    telephoneNos: telephoneNos,
+    cellphoneNo: cellphoneNo,
+    email: email,
+    birthDate: birthDate,
+    religion: religion,
+    sex: sex,
+    status: status,
+    schoolName: schoolName,
+    gradeYearCourse: gradeYearCourse,
+    companyNameAddress: companyNameAddress,
+    fatherName: fatherName,
+    fatherOccupation: fatherOccupation,
+    fatherOfficeAddress: fatherOfficeAddress,
+    fatherContactNos: fatherContactNos,
+    motherName: motherName,
+    motherOccupation: motherOccupation,
+    motherOfficeAddress: motherOfficeAddress,
+    motherContactNos: motherContactNos,
+    guardianName: guardianName,
+    guardianContactNos: guardianContactNos,
+    previousMartialArts: previousMartialArts,
+    otherHobbiesSports: otherHobbiesSports,
+    healthConditions: healthConditions,
+    photoBase64: photoBase64,
+    photoFullBase64: photoFullBase64,
+  );
 
   /// Rebuilds a [Student] from JSON previously written by [toJson].
   /// Missing or corrupt values fall back to empty strings so a bad
   /// record can never crash the app on startup.
   factory Student.fromJson(Map<String, dynamic> json) => Student(
+    uid: json['uid'] as String? ?? '',
     name: json['name'] as String? ?? '',
     studentNo: json['studentNo'] as String? ?? '',
     nickname: json['nickname'] as String? ?? '',
@@ -322,5 +402,6 @@ class Student {
     otherHobbiesSports: json['otherHobbiesSports'] as String? ?? '',
     healthConditions: json['healthConditions'] as String? ?? '',
     photoBase64: json['photoBase64'] as String? ?? '',
+    photoFullBase64: json['photoFullBase64'] as String? ?? '',
   );
 }

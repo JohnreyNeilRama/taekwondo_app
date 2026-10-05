@@ -37,7 +37,7 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
     final initial = widget.initial;
     _belt = (initial != null && BeltCatalog.grades.contains(initial.belt))
         ? initial.belt
-        : BeltCatalog.grades.first;
+        : BeltCatalog.defaultGrade;
     _date = _parse(initial?.lastPromotionDate ?? '');
   }
 

@@ -7,9 +7,10 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'screens/achievement_screen.dart';
 import 'screens/data_transfer_screen.dart';
 import 'screens/promotion_screen.dart';
+import 'screens/security_gate.dart';
+import 'screens/startup_gate.dart';
 import 'screens/students_screen.dart';
-import 'services/app_database.dart';
-import 'services/legacy_json_import.dart';
+import 'services/backup_service.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -20,14 +21,11 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  // Open (and on a brand new device create) the database before the first
-  // screen asks for it, then bring across the records the versions before the
-  // database saved as JSON files. On a phone there are none, and the import
-  // simply does nothing.
-  await AppDatabase.instance.database;
-  await LegacyJsonImporter().importIfNeeded();
-
-  runApp(const TkdApp());
+  // The gate opens (and on a brand new device creates) the database before the
+  // first screen asks for it, brings across the records the versions before the
+  // database saved as JSON files, and shows a message with a way forward if the
+  // database cannot be opened, instead of a blank screen.
+  runApp(const StartupGate(child: TkdApp()));
 }
 
 class TkdApp extends StatelessWidget {
@@ -36,10 +34,12 @@ class TkdApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'TKD Records',
+      title: 'Tae-Kwon-Do',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
-      home: const HomeShell(),
+      // The gate asks for the security password before the registry is built:
+      // the loading screen first, then Security Login.
+      home: SecurityGate(child: const HomeShell()),
     );
   }
 }
@@ -60,16 +60,54 @@ class _HomeShellState extends State<HomeShell> {
   /// back to it.
   int _visits = 0;
 
+  /// Whether records are waiting to be backed up. Drives a small warning dot on
+  /// the Data tab, so the owner is reminded to export without the app taking
+  /// over the data with an automatic copy. Re-read whenever the owner moves
+  /// between destinations, so exporting from the Data page clears it at once.
+  bool _backupDue = false;
+
+  final BackupService _backup = BackupService();
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshBackupReminder();
+  }
+
+  /// Reads whether a backup is due and updates the tab dot. A database problem
+  /// is reported where it happens (the Data page), never here.
+  Future<void> _refreshBackupReminder() async {
+    bool due;
+    try {
+      due = await _backup.reminderDue();
+    } catch (_) {
+      return;
+    }
+    if (!mounted || due == _backupDue) return;
+    setState(() => _backupDue = due);
+  }
+
+  /// Opens destination [index] and records that the owner moved, the same way
+  /// the bar has always done it. The reminder is re-read on every move so it
+  /// reflects the latest export.
+  void _select(int index) {
+    setState(() {
+      _index = index;
+      _visits++;
+    });
+    _refreshBackupReminder();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: _index,
         children: [
-          const StudentsScreen(),
+          StudentsScreen(visits: _visits),
           PromotionScreen(visits: _visits),
           AchievementScreen(visits: _visits),
-          const DataTransferScreen(),
+          DataTransferScreen(visits: _visits),
         ],
       ),
       bottomNavigationBar: DecoratedBox(
@@ -79,10 +117,7 @@ class _HomeShellState extends State<HomeShell> {
         ),
         child: BottomNavigationBar(
           currentIndex: _index,
-          onTap: (i) => setState(() {
-            _index = i;
-            _visits++;
-          }),
+          onTap: _select,
           type: BottomNavigationBarType.fixed,
           backgroundColor: AppColors.surface,
           elevation: 0,
@@ -93,23 +128,27 @@ class _HomeShellState extends State<HomeShell> {
             fontWeight: FontWeight.w600,
           ),
           unselectedLabelStyle: const TextStyle(fontSize: 12),
-          items: const [
-            BottomNavigationBarItem(
+          items: [
+            const BottomNavigationBarItem(
               icon: Icon(Icons.groups_outlined),
               label: 'Students',
             ),
-            BottomNavigationBarItem(
+            const BottomNavigationBarItem(
               icon: Icon(Icons.emoji_events_outlined),
               label: 'Promotion',
             ),
-            BottomNavigationBarItem(
+            const BottomNavigationBarItem(
               icon: Icon(Icons.workspace_premium_outlined),
               label: 'Achievement',
             ),
             // Kept short so the bar stays readable on narrow phones; the
             // screen itself carries the full "Import / Export Data" title.
+            // The dot appears while records are waiting to be exported, so the
+            // owner is reminded to back up.
             BottomNavigationBarItem(
-              icon: Icon(Icons.swap_horiz_outlined),
+              icon: _backupDue
+                  ? const Badge(child: Icon(Icons.swap_horiz_outlined))
+                  : const Icon(Icons.swap_horiz_outlined),
               label: 'Data',
             ),
           ],

@@ -1,8 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- allowBackup is off on purpose: the registry holds children's personal
+         details, so the database is never handed to Android's cloud / device
+         backup. The owner keeps control of the data by exporting a backup file
+         from the Data page, which the app reminds them to do. Turning this on
+         would also copy the file into the user's Google Drive silently. -->
     <application
-        android:label="tkd_app"
+        android:label="Tae-Kwon-Do"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -11,13 +11,19 @@ import 'app_database.dart';
 class AchievementStorage {
   static const String _table = 'achievements';
 
+  /// Bumped by every mutation ([insert], [update], [delete]) so the
+  /// Achievement page can tell whether its records actually changed since it
+  /// last read them, instead of re-reading the whole table on every tab
+  /// visit whether or not anything is different.
+  static int revision = 0;
+
   /// The JOIN that adds the registry number and the current name of the
   /// student to every achievement row.
   static const String _selectWithStudent = '''
 SELECT a.id, a.student_id, a.achievement_date, a.event, a.award,
        s.student_no, s.name AS student_name
 FROM achievements a
-JOIN students s ON s.id = a.student_id
+JOIN students s ON s.id = a.student_id AND s.deleted_at = ''
 ''';
 
   /// Every saved achievement, oldest first.
@@ -42,6 +48,7 @@ JOIN students s ON s.id = a.student_id
   Future<AchievementRecord> insert(AchievementRecord record) async {
     final db = await AppDatabase.instance.database;
     final id = await db.insert(_table, record.toMap());
+    revision++;
     return record.withId(id);
   }
 
@@ -54,11 +61,13 @@ JOIN students s ON s.id = a.student_id
     }
     final db = await AppDatabase.instance.database;
     await db.update(_table, record.toMap(), where: 'id = ?', whereArgs: [id]);
+    revision++;
   }
 
   /// Removes one achievement, leaving the other awards of that student alone.
   Future<void> delete(int id) async {
     final db = await AppDatabase.instance.database;
     await db.delete(_table, where: 'id = ?', whereArgs: [id]);
+    revision++;
   }
 }

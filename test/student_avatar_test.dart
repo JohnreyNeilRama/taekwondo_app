@@ -33,9 +33,13 @@ Widget _host(Student? student, {double size = 56}) => MaterialApp(
 );
 
 /// The bytes of the picture the avatar on screen is drawing.
+///
+/// The avatar decodes at the size it is drawn at, so the provider is a
+/// [ResizeImage] wrapped around the [MemoryImage] that holds the bytes.
 Uint8List _drawnPhoto(WidgetTester tester) {
-  final image = tester.widget<Image>(find.byType(Image));
-  return (image.image as MemoryImage).bytes;
+  final provider = tester.widget<Image>(find.byType(Image)).image;
+  final inner = provider is ResizeImage ? provider.imageProvider : provider;
+  return (inner as MemoryImage).bytes;
 }
 
 void main() {

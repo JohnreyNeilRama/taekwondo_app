@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// The one search field used on the Students, Achievement, and Pending
-/// Students / Select Student pages.
+/// The one search field used on the Students, Promotion, Achievement, and
+/// Pending Students / Select Student pages.
 ///
-/// Kept as a single widget so all three always share the exact same height,
-/// border style, border width, border radius and fill colour, with the hint
-/// and typed text centred both vertically and horizontally inside the box.
+/// Kept as a single widget so every page always shares the exact same height,
+/// border style, border width, border radius, fill colour and font, and the
+/// same layout inside the box: the search glass sits at a fixed distance from
+/// the left border, and the hint and typed text start at a fixed distance from
+/// the glass, left aligned, whatever the box width or the hint length.
 class AppSearchField extends StatelessWidget {
   const AppSearchField({
     super.key,
@@ -26,6 +28,14 @@ class AppSearchField extends StatelessWidget {
   final bool hasQuery;
   final VoidCallback onClear;
 
+  /// Height of the box, the same on every page.
+  static const double height = 44;
+
+  /// Width of the box that holds the search glass. The glass is 20 wide and
+  /// centred in it, so it sits 12 from the left border, and the hint / typed
+  /// text starts 12 after the glass.
+  static const double _iconBoxWidth = 44;
+
   /// One border used for every state (enabled, focused, default) so the box
   /// never changes appearance on tap.
   static const OutlineInputBorder _border = OutlineInputBorder(
@@ -36,31 +46,40 @@ class AppSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44,
+      height: height,
       child: TextField(
         controller: controller,
         onChanged: onChanged,
         textInputAction: TextInputAction.search,
-        // Centres the typed/hint text both horizontally and vertically;
-        // without textAlignVertical the text also sits a little above centre
-        // once a prefix icon is present.
-        textAlign: TextAlign.center,
+        // Hint and typed text start at the left, next to the search glass.
+        // `textAlignVertical` keeps them vertically centred in the box.
+        textAlign: TextAlign.start,
         textAlignVertical: TextAlignVertical.center,
         style: const TextStyle(fontSize: 13, color: AppColors.black),
         decoration: InputDecoration(
           isDense: true,
           hintText: hintText,
           hintTextDirection: TextDirection.ltr,
-          hintStyle: const TextStyle(fontSize: 13, color: AppColors.muted),
+          // One line in every box: a long hint (the Students one) is cut with
+          // an ellipsis instead of wrapping to two lines, which would sit
+          // off-centre in the 44 high box and make the boxes look different.
+          hintMaxLines: 1,
+          hintStyle: const TextStyle(
+            fontSize: 13,
+            color: AppColors.muted,
+            overflow: TextOverflow.ellipsis,
+          ),
           prefixIcon: const Icon(
             Icons.search,
             size: 20,
             color: AppColors.muted,
           ),
-          // A tight, matched box for both icons so neither one forces the
-          // field taller than 44 and throws off the vertical centring.
+          // The text starts where this box ends, so its width sets the gap
+          // between the glass and the placeholder (12). Its height is a tight,
+          // matched box so neither icon forces the field taller than 44 and
+          // throws off the vertical centring.
           prefixIconConstraints: const BoxConstraints(
-            minWidth: 40,
+            minWidth: _iconBoxWidth,
             minHeight: 40,
           ),
           suffixIcon: hasQuery
@@ -80,10 +99,10 @@ class AppSearchField extends StatelessWidget {
           ),
           filled: true,
           fillColor: AppColors.surface,
-          // More room on the right than on the left nudges the centred
-          // hint/text a little to the left of the box centre, while the small
-          // left padding keeps it from crowding the search glass.
-          contentPadding: const EdgeInsets.fromLTRB(4, 12, 40, 12),
+          // No left padding: the search glass box already provides it. The
+          // right padding keeps long text off the border when there is no
+          // clear button.
+          contentPadding: const EdgeInsets.fromLTRB(0, 12, 12, 12),
           border: _border,
           enabledBorder: _border,
           focusedBorder: _border,

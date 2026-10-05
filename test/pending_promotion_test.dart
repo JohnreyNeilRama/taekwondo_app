@@ -22,6 +22,20 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
+/// Gives the test its own empty in-memory database, so no test can see another
+/// one records and the registry on the device is never touched.
+///
+/// The reset runs inside [WidgetTester.runAsync] on purpose: closing the
+/// previous database is real SQLite work that only completes on the real event
+/// loop. Awaiting it from `setUp` or `tearDown` (which run on the fake clock of
+/// a widget test) is what used to hang the whole test run.
+Future<void> _freshDatabase(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    await AppDatabase.debugReset();
+    AppDatabase.debugOverridePath = inMemoryDatabasePath;
+  });
+}
+
 /// Opens [page] the way selecting the destination does: the previous screen is
 /// unmounted first, so the page starts from `initState` and reads the saved
 /// rows again instead of keeping the state of an earlier visit.
@@ -53,20 +67,16 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  setUp(() async {
-    // Every test starts from its own empty in-memory database, so no test can
-    // see another one records and the registry on the device is never touched.
-    await AppDatabase.debugReset();
-    AppDatabase.debugOverridePath = inMemoryDatabasePath;
-  });
-
-  tearDown(() async {
+  // Every test starts from its own database through [_freshDatabase]; this only
+  // closes the last one, outside any test, where real time is available.
+  tearDownAll(() async {
     await AppDatabase.debugReset();
   });
 
   testWidgets('Pending holds the registry students who have no belt', (
     WidgetTester tester,
   ) async {
+    await _freshDatabase(tester);
     await tester.runAsync(_seed);
     await _openPage(tester, const PromotionScreen());
 
@@ -81,7 +91,10 @@ void main() {
 
     // The Pending list offers exactly the student who still needs a belt.
     expect(find.text('Pending Students'), findsOneWidget);
-    expect(find.text('Students without a belt (1)'), findsOneWidget);
+    expect(
+      find.text('These students are waiting to be assigned a belt.'),
+      findsOneWidget,
+    );
     expect(find.text('Jrey Neil'), findsOneWidget);
     expect(find.text('Ann Cruz'), findsNothing);
 
@@ -123,6 +136,7 @@ void main() {
   testWidgets('a student added on the Students page waits in Pending', (
     WidgetTester tester,
   ) async {
+    await _freshDatabase(tester);
     await _openPage(tester, const PromotionScreen());
 
     // With an empty registry there is nobody to assign a belt to.

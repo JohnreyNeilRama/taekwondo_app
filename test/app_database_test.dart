@@ -39,16 +39,40 @@ void main() {
     }
   });
 
-  test('students holds the id, the registry number and the name first', () async {
+  test(
+    'students holds the id, the registry number and the name first',
+    () async {
+      final db = await AppDatabase.instance.database;
+      final columns = await db.rawQuery('PRAGMA table_info(students)');
+      final names = [for (final column in columns) column['name'] as String];
+
+      expect(names.first, 'id');
+      expect(names[1], 'student_no');
+      expect(names[2], 'name');
+      // The three above plus the 25 remaining sheet columns, the two photo
+      // columns (the compact copy and the original), the Trash mark and the
+      // stable identity.
+      expect(names, hasLength(32));
+      expect(names, contains('uid'));
+    },
+  );
+
+  test('the contact columns take a number of any shape, so no table change is '
+      'needed', () async {
     final db = await AppDatabase.instance.database;
     final columns = await db.rawQuery('PRAGMA table_info(students)');
-    final names = [for (final column in columns) column['name'] as String];
+    final byName = {
+      for (final column in columns) column['name'] as String: column,
+    };
 
-    expect(names.first, 'id');
-    expect(names[1], 'student_no');
-    expect(names[2], 'name');
-    // The three above plus the 25 remaining sheet columns and the photo.
-    expect(names, hasLength(29));
+    for (final name in ['telephone_nos', 'cellphone_no']) {
+      // Plain text with no length limit and no format rule: the 11-digit
+      // cellphone and the laid-out 10-digit telephone both fit exactly as they
+      // are, and a number saved in any older shape is never refused by the
+      // table. Nothing here needs a migration.
+      expect(byName[name]?['type'], 'TEXT', reason: '$name should be TEXT');
+      expect(byName[name]?['notnull'], 1, reason: '$name should be NOT NULL');
+    }
   });
 
   test('promotions allows one record per student', () async {
@@ -85,4 +109,3 @@ void main() {
     expect(rows.first.values.first, 1);
   });
 }
-

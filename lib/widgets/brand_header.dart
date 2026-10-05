@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
 /// Dark top bar with the TKD logo, app title and an optional widget
-/// (such as the search field) shown underneath.
+/// (such as the search field) shown underneath. [actions] are icon buttons
+/// placed at the upper-right corner of the bar.
 class BrandHeader extends StatelessWidget {
-  const BrandHeader({super.key, this.bottom});
+  const BrandHeader({super.key, this.bottom, this.actions = const []});
 
   final Widget? bottom;
+
+  /// Buttons shown at the right end of the title row, e.g. the Trash button.
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -40,26 +44,29 @@ class BrandHeader extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'TKD Records',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'TKD Records',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
-                      ),
-                      Text(
-                        'Student Registry',
-                        style: TextStyle(
-                          color: Color(0xFFD1D5DB),
-                          fontSize: 12,
+                        Text(
+                          'Student Registry',
+                          style: TextStyle(
+                            color: Color(0xFFD1D5DB),
+                            fontSize: 12,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  ...actions,
                 ],
               ),
               if (bottom != null) ...[const SizedBox(height: 16), bottom!],

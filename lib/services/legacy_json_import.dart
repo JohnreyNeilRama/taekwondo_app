@@ -7,7 +7,10 @@ import 'package:sqflite/sqflite.dart';
 import '../models/achievement_record.dart';
 import '../models/belt.dart';
 import '../models/student.dart';
+import 'achievement_storage.dart';
 import 'app_database.dart';
+import 'promotion_storage.dart';
+import 'student_storage.dart';
 
 /// One-time import of the JSON files the app used before it had a database.
 ///
@@ -62,6 +65,13 @@ class LegacyJsonImporter {
         await _importPromotions(txn, promotions, idsByStudentNo);
         await _importAchievements(txn, achievements, idsByStudentNo);
       });
+      // This writes straight to the tables, bypassing the storage classes'
+      // own insert methods, so their revision counters have to be bumped
+      // here — otherwise the Promotion and Achievement pages would not
+      // notice the rows this just added.
+      StudentStorage.revision++;
+      PromotionStorage.revision++;
+      AchievementStorage.revision++;
       return students.length;
     } catch (_) {
       return 0;

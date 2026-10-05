@@ -21,7 +21,8 @@ class StudentDetailScreen extends StatelessWidget {
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete student?'),
         content: Text(
-          '${student.name} will be removed from the registry permanently.',
+          '${student.name} will be moved to Trash. '
+          'You can restore them from there.',
         ),
         actions: [
           TextButton(

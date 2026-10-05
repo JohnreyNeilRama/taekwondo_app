@@ -10,13 +10,19 @@ import 'app_database.dart';
 class PromotionStorage {
   static const String _table = 'promotions';
 
+  /// Bumped by every [saveForStudent] so the Promotion page can tell whether
+  /// its records actually changed since it last read them, instead of
+  /// re-reading the whole table on every tab visit whether or not anything is
+  /// different.
+  static int revision = 0;
+
   /// The JOIN that adds the registry number and the current name of the
   /// student to every promotion row.
   static const String _selectWithStudent = '''
 SELECT p.id, p.student_id, p.belt, p.last_promotion_date,
        s.student_no, s.name AS student_name
 FROM promotions p
-JOIN students s ON s.id = p.student_id
+JOIN students s ON s.id = p.student_id AND s.deleted_at = ''
 ''';
 
   /// Every saved promotion, oldest first.
@@ -53,6 +59,7 @@ JOIN students s ON s.id = p.student_id
       );
       return existingId;
     });
+    revision++;
     return record.withId(id);
   }
 }

@@ -73,6 +73,9 @@ Future<void> _seedStudent() async {
 }
 
 /// The bytes of the picture the avatars on screen are drawing.
+///
+/// The avatar decodes at the size it is drawn at, so the provider is a
+/// [ResizeImage] wrapped around the [MemoryImage] that holds the bytes.
 Uint8List _shownPhoto(WidgetTester tester) {
   final image = tester.widget<Image>(
     find
@@ -82,7 +85,9 @@ Uint8List _shownPhoto(WidgetTester tester) {
         )
         .first,
   );
-  return (image.image as MemoryImage).bytes;
+  final provider = image.image;
+  final inner = provider is ResizeImage ? provider.imageProvider : provider;
+  return (inner as MemoryImage).bytes;
 }
 
 /// The initials fallback of a student, when it is drawn instead of a picture.
@@ -114,7 +119,7 @@ void main() {
     await tester.runAsync(_seedStudent);
     await _openPage(tester, const StudentsScreen());
 
-    expect(find.text('Jrey Neil'), findsOneWidget);
+    expect(find.text('Neil, Jrey'), findsOneWidget);
     expect(find.byType(StudentAvatar), findsOneWidget);
     expect(_shownPhoto(tester), _png);
     // The initials are only the fallback, so they are not drawn as well.
@@ -145,7 +150,7 @@ void main() {
     expect(_initialsOf('JN'), findsNothing);
   });
 
-  testWidgets('a change to the picture reaches every page, on one student', (
+  testWidgets('an edit that carries no picture never wipes it, on any page', (
     WidgetTester tester,
   ) async {
     await tester.runAsync(_seedStudent);
@@ -153,60 +158,30 @@ void main() {
     await _openPage(tester, const StudentsScreen());
     expect(_shownPhoto(tester), _png);
 
-    final saved = (await tester.runAsync(StudentStorage().loadStudents))!.single;
+    final saved = (await tester.runAsync(StudentStorage().loadStudents))!
+        .single;
 
-    // The edit the information sheet performs when the picture is replaced:
-    // the same row is written, so the registry still holds one student.
+    // An edit that hands back no picture: a list row carries the compact copy
+    // only, and a form that never loaded the photo returns none. The same row
+    // is written, and the saved picture must stay: nothing on screen can erase
+    // a picture, so an empty one means "not carried", not "remove it".
     await tester.runAsync(
       () => StudentStorage().update(
-        Student(
-          id: saved.id,
-          studentNo: saved.studentNo,
-          name: saved.name,
-          photoBase64: _savedPhoto,
-        ),
-      ),
-    );
-
-    // Clearing the picture is picked up on the same row, not by adding a
-    // student: a row without a picture falls back to the initials.
-    await tester.runAsync(
-      () => StudentStorage().update(
-        Student(
-          id: saved.id,
-          studentNo: saved.studentNo,
-          name: saved.name,
-        ),
+        Student(id: saved.id, studentNo: saved.studentNo, name: saved.name),
       ),
     );
 
     await _openPage(tester, const StudentsScreen());
-    expect(_initialsOf('JN'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(StudentAvatar),
-        matching: find.byType(Image),
-      ),
-      findsNothing,
-    );
+    expect(_shownPhoto(tester), _png);
+    expect(_initialsOf('JN'), findsNothing);
 
     await _openPage(tester, const AchievementScreen());
-    expect(_initialsOf('JN'), findsOneWidget);
-
-    // Uploading a picture again puts it back on the card of that same student.
-    await tester.runAsync(
-      () => StudentStorage().update(
-        Student(
-          id: saved.id,
-          studentNo: saved.studentNo,
-          name: saved.name,
-          photoBase64: _savedPhoto,
-        ),
-      ),
-    );
+    expect(_shownPhoto(tester), _png);
 
     await _openPage(tester, const PromotionScreen());
     expect(_shownPhoto(tester), _png);
+
+    // Still one student: the edit wrote the same row instead of adding one.
     expect((await tester.runAsync(StudentStorage().loadStudents))!.length, 1);
   });
 

@@ -7,22 +7,26 @@
 class BeltCatalog {
   const BeltCatalog._();
 
-  /// Every selectable belt grade, lowest rank first. This is the order of the
+  /// Every selectable belt grade, highest rank first. This is the order of the
   /// Belt dropdown and of the grouped promotion list.
   static const List<String> grades = [
-    '9th Grade White',
-    '8th Grade Yellow',
-    '7th Grade Yellow',
-    '6th Grade Blue',
-    '5th Grade Blue',
-    '4th Grade Red',
-    '3rd Grade Red',
-    '2nd Grade Brown',
-    '1st Grade Brown',
-    '1st Dan Blackbelt',
-    '2nd Dan Blackbelt',
     '3rd Dan Blackbelt',
+    '2nd Dan Blackbelt',
+    '1st Dan Blackbelt',
+    '1st Grade Brown',
+    '2nd Grade Brown',
+    '3rd Grade Red',
+    '4th Grade Red',
+    '5th Grade Blue',
+    '6th Grade Blue',
+    '7th Grade Yellow',
+    '8th Grade Yellow',
+    '9th Grade White',
   ];
+
+  /// The belt the Promotion form opens on for a new record: the entry-level
+  /// grade, independent of where it sits in [grades].
+  static const String defaultGrade = '9th Grade White';
 
   /// The six belt colours shown as Quick Cards, strongest belt first: the
   /// order the cards are displayed in.

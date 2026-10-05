@@ -1,6 +1,6 @@
 {
-    "name": "tkd_app",
-    "short_name": "tkd_app",
+    "name": "Tae-Kwon-Do",
+    "short_name": "Tae-Kwon-Do",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

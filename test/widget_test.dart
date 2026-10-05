@@ -3,7 +3,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:tkd_app/main.dart';
+import 'package:tkd_app/models/student.dart';
+import 'package:tkd_app/screens/security_gate.dart';
 import 'package:tkd_app/services/app_database.dart';
+import 'package:tkd_app/services/student_storage.dart';
 
 /// Flushes both kinds of async work this app relies on.
 ///
@@ -25,6 +28,24 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
+/// Gives the test its own empty in-memory database, so no test can see another
+/// one's records and the registry on the device is never touched.
+///
+/// The reset runs inside [WidgetTester.runAsync] on purpose: closing the
+/// previous database is real SQLite work that only completes on the real event
+/// loop. Awaiting it from `setUp` or `tearDown` (which run on the fake clock of
+/// a widget test) is what used to hang the whole test run.
+Future<void> _freshDatabase(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    await AppDatabase.debugReset();
+    AppDatabase.debugOverridePath = inMemoryDatabasePath;
+  });
+  // The registry tests are about the records, not about signing in, so the
+  // Security Account lock is started already open. The gate itself has its own
+  // tests in test/security_flow_test.dart.
+  SecurityGate.debugSkipLock = true;
+}
+
 /// Opens the database, then builds the app on it.
 ///
 /// The very first call to the database has to answer from the real event loop,
@@ -32,6 +53,7 @@ Future<void> _settle(WidgetTester tester) async {
 /// driving the widgets. Everything the screens ask for afterwards completes
 /// inside [_settle].
 Future<void> _startApp(WidgetTester tester) async {
+  await _freshDatabase(tester);
   await tester.runAsync(() => AppDatabase.instance.database);
   await tester.pumpWidget(const TkdApp());
   await _settle(tester);
@@ -45,15 +67,9 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  setUp(() async {
-    // Every test starts from its own empty in-memory database, so no test can
-    // see another one's records and the registry on the device is never
-    // touched.
-    await AppDatabase.debugReset();
-    AppDatabase.debugOverridePath = inMemoryDatabasePath;
-  });
-
-  tearDown(() async {
+  // Every test starts from its own database through [_freshDatabase]; this only
+  // closes the last one, outside any test, where real time is available.
+  tearDownAll(() async {
     await AppDatabase.debugReset();
   });
 
@@ -79,14 +95,15 @@ void main() {
     await tester.tap(find.text('Save Student'));
     await _settle(tester);
 
-    expect(find.text('Nguyen Van A'), findsOneWidget);
+    expect(find.text('A, Nguyen Van'), findsOneWidget);
     expect(find.text('1 record'), findsOneWidget);
     expect(find.text('No student records found.'), findsNothing);
 
-    // The redesigned card shows the registry badge and both actions.
-    expect(find.text('TKD-0001'), findsOneWidget);
-    expect(find.text('View'), findsOneWidget);
-    expect(find.text('Edit'), findsOneWidget);
+    // The card shows the family name first and an Edit button in the corner;
+    // the registry number and the old View button are no longer on the card.
+    expect(find.text('TKD-0001'), findsNothing);
+    expect(find.text('View'), findsNothing);
+    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
 
     // A search with no match brings the empty state back.
     await tester.enterText(find.byType(TextField), 'Tran');
@@ -142,26 +159,17 @@ void main() {
       lessThan(tester.getTopLeft(find.byType(TextField)).dy),
     );
 
-    // Achievement: the designed screen, listing the registry one card per
-    // student, with the search box and the Add Student action on top.
+    // Achievement: listing the registry one card per student, with only the
+    // search box on top: there is no Add Student action on this page.
     await tester.tap(find.text('Achievement').last);
     await _settle(tester);
     expect(find.text('Achievement Record'), findsOneWidget);
-    expect(find.text('+ Add Student'), findsOneWidget);
-    // The Filter button is gone and the search box now sits in its place, on
-    // the same row, left of the Add Student action.
+    expect(find.text('+ Add Student'), findsNothing);
     expect(find.text('Many to one'), findsNothing);
     final searchBox = find.byType(TextField);
-    final addButton = find.widgetWithText(FilledButton, '+ Add Student');
     expect(searchBox, findsOneWidget);
-    expect(
-      tester.getCenter(searchBox).dy,
-      closeTo(tester.getCenter(addButton).dy, 1),
-    );
-    expect(
-      tester.getRect(searchBox).right,
-      lessThan(tester.getRect(addButton).left),
-    );
+    // The search box now takes the whole row.
+    expect(tester.getSize(searchBox).width, greaterThan(300));
     expect(find.text('List of Students'), findsOneWidget);
     // No students saved yet, so the list explains where to start.
     expect(find.text('No students yet'), findsOneWidget);
@@ -180,78 +188,80 @@ void main() {
     expect(find.text('All Students'), findsOneWidget);
   });
 
-  testWidgets(
-    'Promotion "Pending" offers students added after app launch',
-    (WidgetTester tester) async {
-      await _startApp(tester);
+  testWidgets('Promotion "Pending" offers students added after app launch', (
+    WidgetTester tester,
+  ) async {
+    await _startApp(tester);
 
-      // The Promotion screen is built at launch by the IndexedStack, before
-      // any student exists. Adding a student afterwards must still make them
-      // turn up as pending for a belt.
-      await tester.tap(find.text('+ Add Student').first);
-      await _settle(tester);
-      await tester.enterText(
-        find.widgetWithText(TextField, 'Enter full name'),
-        'Nguyen Van A',
-      );
-      await tester.tap(find.text('Save Student'));
-      await _settle(tester);
+    // The Promotion screen is built at launch by the IndexedStack, before
+    // any student exists. Adding a student afterwards must still make them
+    // turn up as pending for a belt.
+    await tester.tap(find.text('+ Add Student').first);
+    await _settle(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Enter full name'),
+      'Nguyen Van A',
+    );
+    await tester.tap(find.text('Save Student'));
+    await _settle(tester);
 
-      await tester.tap(find.text('Promotion').last);
-      await _settle(tester);
-      expect(find.text('No promotion records yet'), findsOneWidget);
-      // The student was saved with no belt, so they are counted as pending.
-      expect(find.text('Pending (1)'), findsOneWidget);
+    await tester.tap(find.text('Promotion').last);
+    await _settle(tester);
+    expect(find.text('No promotion records yet'), findsOneWidget);
+    // The student was saved with no belt, so they are counted as pending.
+    expect(find.text('Pending (1)'), findsOneWidget);
 
-      // The Pending button opens the list of students who still need a belt;
-      // it never creates one. The picker then reads the registry from disk:
-      // real file I/O on the fake clock, so its continuation needs both real
-      // time and a frame.
-      await tester.tap(find.widgetWithText(FilledButton, 'Pending (1)'));
-      await _settle(tester);
+    // The Pending button opens the list of students who still need a belt;
+    // it never creates one. The picker then reads the registry from disk:
+    // real file I/O on the fake clock, so its continuation needs both real
+    // time and a frame.
+    await tester.tap(find.widgetWithText(FilledButton, 'Pending (1)'));
+    await _settle(tester);
 
-      // The picker offers the student that already exists in the registry.
-      expect(find.text('Search your students'), findsOneWidget);
-      expect(find.text('Pending Students'), findsOneWidget);
-      expect(find.text('Students without a belt (1)'), findsOneWidget);
-      expect(find.text('Nguyen Van A'), findsOneWidget);
+    // The picker offers the student that already exists in the registry.
+    expect(find.text('Search your students'), findsOneWidget);
+    expect(find.text('Pending Students'), findsOneWidget);
+    expect(
+      find.text('These students are waiting to be assigned a belt.'),
+      findsOneWidget,
+    );
+    expect(find.text('Nguyen Van A'), findsOneWidget);
 
-      // Choosing them opens the promotion form for that same record.
-      await tester.tap(find.text('Nguyen Van A').last);
-      await _settle(tester);
-      expect(find.text('PROMOTION DETAILS'), findsOneWidget);
+    // Choosing them opens the promotion form for that same record.
+    await tester.tap(find.text('Nguyen Van A').last);
+    await _settle(tester);
+    expect(find.text('PROMOTION DETAILS'), findsOneWidget);
 
-      // The Belt menu opens on the lowest grade and lists the curriculum.
-      await tester.tap(find.text('9th Grade White'));
-      await _settle(tester);
-      expect(find.text('9th Grade White'), findsNWidgets(2));
-      await tester.tap(find.text('8th Grade Yellow').last);
-      await _settle(tester);
-      await tester.tap(find.text('Save Record'));
-      await _settle(tester);
+    // The Belt menu opens on the lowest grade and lists the curriculum.
+    await tester.tap(find.text('9th Grade White'));
+    await _settle(tester);
+    expect(find.text('9th Grade White'), findsNWidgets(2));
+    await tester.tap(find.text('8th Grade Yellow').last);
+    await _settle(tester);
+    await tester.tap(find.text('Save Record'));
+    await _settle(tester);
 
-      // The student now appears on the Promotion list under their grade
-      // heading, and that grade is counted on its colour's Quick Card.
-      expect(find.text('Nguyen Van A'), findsOneWidget);
-      expect(find.text('TKD-0001'), findsOneWidget);
-      expect(find.text('8th Grade Yellow'), findsOneWidget);
-      expect(
-        find.descendant(
-          of: find.widgetWithText(Container, 'Yellow Belts'),
-          matching: find.text('1'),
-        ),
-        findsOneWidget,
-      );
-      // The belt is saved, so the student has left Pending.
-      expect(find.text('Pending (0)'), findsOneWidget);
+    // The student now appears on the Promotion list under their grade
+    // heading, and that grade is counted on its colour's Quick Card.
+    expect(find.text('Nguyen Van A'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsOneWidget);
+    expect(find.text('8th Grade Yellow'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.widgetWithText(Container, 'Yellow Belts'),
+        matching: find.text('1'),
+      ),
+      findsOneWidget,
+    );
+    // The belt is saved, so the student has left Pending.
+    expect(find.text('Pending (0)'), findsOneWidget);
 
-      // The registry itself is untouched: still exactly one student record.
-      await tester.tap(find.text('Students').last);
-      await _settle(tester);
-      expect(find.text('1 record'), findsOneWidget);
-      expect(find.text('Nguyen Van A'), findsOneWidget);
-    },
-  );
+    // The registry itself is untouched: still exactly one student record.
+    await tester.tap(find.text('Students').last);
+    await _settle(tester);
+    expect(find.text('1 record'), findsOneWidget);
+    expect(find.text('A, Nguyen Van'), findsOneWidget);
+  });
 
   testWidgets(
     'Tapping a student opens the detail screen and editing saves changes',
@@ -269,7 +279,7 @@ void main() {
       await _settle(tester);
 
       // Tap the tile to open the detail screen.
-      await tester.tap(find.text('Nguyen Van A'));
+      await tester.tap(find.text('A, Nguyen Van'));
       await _settle(tester);
       expect(find.text('Delete Student'), findsOneWidget);
       expect(find.text('Save Student'), findsNothing);
@@ -289,9 +299,9 @@ void main() {
       await tester.tap(find.text('Save Changes'));
       await _settle(tester);
 
-      // Back on the list, the updated name is shown.
-      expect(find.text('Nguyen Van B'), findsOneWidget);
-      expect(find.text('Nguyen Van A'), findsNothing);
+      // Back on the list, the updated name is shown, family name first.
+      expect(find.text('B, Nguyen Van'), findsOneWidget);
+      expect(find.text('A, Nguyen Van'), findsNothing);
     },
   );
 
@@ -309,7 +319,7 @@ void main() {
     await tester.tap(find.text('Save Student'));
     await _settle(tester);
 
-    await tester.tap(find.text('Nguyen Van A'));
+    await tester.tap(find.text('A, Nguyen Van'));
     await _settle(tester);
 
     await tester.tap(find.text('Delete Student'));
@@ -339,7 +349,7 @@ void main() {
 
     // The card's Edit button goes straight to a prefilled form -
     // without the detail screen in between.
-    await tester.tap(find.text('Edit'));
+    await tester.tap(find.byTooltip('Edit student'));
     await _settle(tester);
     expect(find.text('Save Changes'), findsOneWidget);
     final nameField = find.widgetWithText(TextField, 'Enter full name');
@@ -352,11 +362,11 @@ void main() {
     await tester.enterText(nameField, 'Nguyen Van B');
     await tester.tap(find.text('Save Changes'));
     await _settle(tester);
-    expect(find.text('Nguyen Van B'), findsOneWidget);
-    expect(find.text('TKD-0001'), findsOneWidget);
+    expect(find.text('B, Nguyen Van'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsNothing);
   });
 
-  testWidgets('Achievement "Add Student" records an award for a student', (
+  testWidgets('Achievement details: "Add Achievement" records an award', (
     WidgetTester tester,
   ) async {
     await _startApp(tester);
@@ -375,11 +385,21 @@ void main() {
     await _settle(tester);
     expect(find.text('Nguyen Van A'), findsOneWidget);
 
-    // "Add Student" opens the floating form instead of creating a student.
-    await tester.tap(find.text('+ Add Student'));
+    // There is no Add Student action on this page: tapping the student's card
+    // opens their records, which no longer carry the old "Student" header.
+    expect(find.text('+ Add Student'), findsNothing);
+    await tester.tap(find.text('Nguyen Van A'));
     await _settle(tester);
-    expect(find.text('Add Achievement'), findsOneWidget);
-    expect(find.text('Select a student'), findsOneWidget);
+    expect(find.text('Achievement Details'), findsOneWidget);
+    expect(
+      find.text('Records are linked to this registry entry'),
+      findsNothing,
+    );
+
+    // "Add Achievement" opens the floating form, locked to this student.
+    await tester.tap(find.text('Add Achievement'));
+    await _settle(tester);
+    expect(find.text('Select a student'), findsNothing);
     // Every field of the form, inside the floating dialog. Scoped to the
     // dialog because "Achievement" is also a bottom navigation label.
     for (final label in const ['Student', 'Date', 'Event', 'Achievement']) {
@@ -389,13 +409,14 @@ void main() {
       );
     }
 
-    // The student comes from the existing registry, through the picker.
-    await tester.tap(find.text('Select a student'));
-    await _settle(tester);
-    expect(find.text('Search your students'), findsOneWidget);
-    await tester.tap(find.text('Nguyen Van A').last);
-    await _settle(tester);
-    expect(find.text('Select a student'), findsNothing);
+    // The student is already filled in and cannot be changed from here.
+    expect(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.text('Nguyen Van A'),
+      ),
+      findsOneWidget,
+    );
 
     // Event text field, then the medal dropdown.
     await tester.enterText(
@@ -411,25 +432,199 @@ void main() {
     await tester.tap(find.text('Save Record'));
     await _settle(tester);
 
-    // The form closes and the award is listed against that student.
-    expect(find.text('Add Achievement'), findsNothing);
+    // The form closes (only the action bar's button is left) and the award is
+    // listed on this student's records.
+    expect(find.text('Add Achievement'), findsOneWidget);
+    expect(find.text('National Tournament'), findsOneWidget);
+    expect(find.text('Silver'), findsOneWidget);
+    expect(find.text('1 record'), findsOneWidget);
+
+    // Back on the list, the student's card carries the medal.
+    await tester.tap(find.byTooltip('Back'));
+    await _settle(tester);
     expect(find.text('Nguyen Van A'), findsOneWidget);
     expect(find.textContaining('Silver'), findsOneWidget);
     expect(find.text('1 student \u00B7 1 achievement record'), findsOneWidget);
-
-    // Tapping the card opens that student's records.
-    await tester.tap(find.text('Nguyen Van A'));
-    await _settle(tester);
-    expect(find.text('Achievement Details'), findsOneWidget);
-    expect(find.text('National Tournament'), findsOneWidget);
-    expect(find.text('Silver'), findsOneWidget);
-
-    // The registry itself is untouched: still exactly one student record.
-    await tester.tap(find.byTooltip('Back'));
-    await _settle(tester);
     await tester.tap(find.text('Students').last);
     await _settle(tester);
     expect(find.text('1 record'), findsOneWidget);
+    expect(find.text('A, Nguyen Van'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Students list shows records added elsewhere when the tab is visited again',
+    (WidgetTester tester) async {
+      await _startApp(tester);
+      expect(find.text('0 records'), findsOneWidget);
+
+      // Something other than the Students screen writes a student, the way a
+      // backup import does: straight to the storage layer.
+      await tester.runAsync(
+        () => StudentStorage().insert(Student(name: 'Imported Kid')),
+      );
+
+      // Leave the Students tab and come back to it.
+      await tester.tap(find.text('Data').last);
+      await _settle(tester);
+      await tester.tap(find.text('Students').last);
+      await _settle(tester);
+
+      expect(find.text('Kid, Imported'), findsOneWidget);
+      expect(find.text('1 record'), findsOneWidget);
+    },
+  );
+
+  testWidgets('The "moved to Trash / Undo" message goes away by itself', (
+    WidgetTester tester,
+  ) async {
+    await _startApp(tester);
+
+    await tester.tap(find.text('+ Add Student').first);
+    await _settle(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Enter full name'),
+      'Nguyen Van A',
+    );
+    await tester.tap(find.text('Save Student'));
+    await _settle(tester);
+
+    await tester.tap(find.text('A, Nguyen Van'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete Student'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete'));
+    await _settle(tester);
+
+    // The message is up, with its Undo action.
+    expect(find.text('Nguyen Van A moved to Trash'), findsOneWidget);
+    expect(find.text('Undo'), findsOneWidget);
+
+    // Nobody taps it: after its display time it has to leave on its own.
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Nguyen Van A moved to Trash'), findsNothing);
+    expect(find.text('Undo'), findsNothing);
+    // The deletion itself stays in place.
+    expect(find.text('0 records'), findsOneWidget);
+  });
+
+  testWidgets('Undo puts a deleted student back', (WidgetTester tester) async {
+    await _startApp(tester);
+
+    await tester.tap(find.text('+ Add Student').first);
+    await _settle(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Enter full name'),
+      'Nguyen Van A',
+    );
+    await tester.tap(find.text('Save Student'));
+    await _settle(tester);
+
+    await tester.tap(find.text('A, Nguyen Van'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete Student'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete'));
+    await _settle(tester);
+    expect(find.text('0 records'), findsOneWidget);
+
+    await tester.tap(find.text('Undo'));
+    await _settle(tester);
+
+    expect(find.text('A, Nguyen Van'), findsOneWidget);
+    expect(find.text('1 record'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsNothing);
+  });
+
+  testWidgets('A deleted student can be restored from the Trash', (
+    WidgetTester tester,
+  ) async {
+    await _startApp(tester);
+
+    await tester.tap(find.text('+ Add Student').first);
+    await _settle(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Enter full name'),
+      'Nguyen Van A',
+    );
+    await tester.tap(find.text('Save Student'));
+    await _settle(tester);
+
+    // Deleting only moves the student to the Trash.
+    await tester.tap(find.text('A, Nguyen Van'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete Student'));
+    await _settle(tester);
+    expect(find.textContaining('moved to Trash'), findsOneWidget);
+    await tester.tap(find.text('Delete'));
+    await _settle(tester);
+    expect(find.text('0 records'), findsOneWidget);
+
+    // The Trash button in the upper-right corner opens the Trash page, where
+    // the student waits with both actions.
+    await tester.tap(find.byTooltip('Trash'));
+    await _settle(tester);
     expect(find.text('Nguyen Van A'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsOneWidget);
+    expect(find.text('Restore'), findsOneWidget);
+    expect(find.text('Delete Permanently'), findsOneWidget);
+
+    // Restore brings the student back to TKD Records.
+    await tester.tap(find.text('Restore'));
+    await _settle(tester);
+    expect(find.text('Trash is empty'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await _settle(tester);
+
+    expect(find.text('A, Nguyen Van'), findsOneWidget);
+    expect(find.text('1 record'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsNothing);
+  });
+
+  testWidgets('Delete Permanently asks first, then removes the student', (
+    WidgetTester tester,
+  ) async {
+    await _startApp(tester);
+
+    await tester.tap(find.text('+ Add Student').first);
+    await _settle(tester);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Enter full name'),
+      'Nguyen Van A',
+    );
+    await tester.tap(find.text('Save Student'));
+    await _settle(tester);
+    await tester.tap(find.text('A, Nguyen Van'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete Student'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete'));
+    await _settle(tester);
+
+    await tester.tap(find.byTooltip('Trash'));
+    await _settle(tester);
+
+    // Cancelling the confirmation keeps the student in the Trash.
+    await tester.tap(find.text('Delete Permanently'));
+    await _settle(tester);
+    expect(find.text('Delete permanently?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await _settle(tester);
+    expect(find.text('Nguyen Van A'), findsOneWidget);
+    expect(
+      (await tester.runAsync(() => StudentStorage().loadTrash()))!,
+      hasLength(1),
+    );
+
+    // Confirming removes the student for good.
+    await tester.tap(find.text('Delete Permanently'));
+    await _settle(tester);
+    await tester.tap(find.text('Delete Permanently').last);
+    await _settle(tester);
+    expect(find.text('Trash is empty'), findsOneWidget);
+    expect(
+      (await tester.runAsync(() => StudentStorage().loadTrash()))!,
+      isEmpty,
+    );
   });
 }

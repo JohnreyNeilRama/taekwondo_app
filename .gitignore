@@ -66,3 +66,9 @@ test/tmp_*.dart
 *.db
 *.sqlite
 *.sqlite3
+
+# Android release signing (the keystore and its passwords are never committed)
+key.properties
+android/key.properties
+*.jks
+*.keystore

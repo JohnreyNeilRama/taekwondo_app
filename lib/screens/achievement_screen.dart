@@ -37,8 +37,21 @@ class _AchievementScreenState extends State<AchievementScreen> {
 
   List<AchievementRecord> _records = [];
   List<Student> _students = [];
+
+  /// Every student's achievements, grouped once per [_load] instead of
+  /// filtered out of the full list on every card built. Rebuilding this is
+  /// O(n) per load; looking a student up in it is O(1), which is what keeps
+  /// opening a registry of hundreds of students cheap.
+  Map<int, List<AchievementRecord>> _recordsByStudent = {};
   bool _loading = true;
   String _query = '';
+
+  /// The storage revisions this page last read. Null forces the first
+  /// [_load] to fetch both tables; after that, a tab visit or a post-edit
+  /// refresh only re-reads a table whose revision has actually moved on,
+  /// instead of both of them every single time.
+  int? _seenStudentsRevision;
+  int? _seenAchievementsRevision;
 
   @override
   void initState() {
@@ -60,13 +73,27 @@ class _AchievementScreenState extends State<AchievementScreen> {
     if (widget.visits != oldWidget.visits) _load();
   }
 
-  /// Reads the registry and the achievement records. The registry comes first
-  /// so the list can show every student, awards or not.
+  /// Reads the registry and the achievement records — but only the ones that
+  /// actually changed since the last read.
+  ///
+  /// Both this page's own tab-visit refresh and the achievement detail
+  /// screen's post-edit callback go through here, so the same check covers
+  /// both: if a Students-page edit hasn't touched [StudentStorage.revision]
+  /// and this page's own edits haven't touched [AchievementStorage.revision],
+  /// there is nothing to read and the database is not touched at all.
   Future<void> _load() async {
+    final needStudents = _seenStudentsRevision != StudentStorage.revision;
+    final needRecords = _seenAchievementsRevision != AchievementStorage.revision;
+    if (!needStudents && !needRecords) {
+      if (_loading && mounted) setState(() => _loading = false);
+      return;
+    }
     try {
       final results = await Future.wait([
-        _studentStorage.loadStudents(),
-        _achievementStorage.loadRecords(),
+        needStudents ? _studentStorage.loadStudents() : _identity(_students),
+        needRecords
+            ? _achievementStorage.loadRecords()
+            : _identity(_records),
       ]);
       if (!mounted) return;
       setState(() {
@@ -75,12 +102,68 @@ class _AchievementScreenState extends State<AchievementScreen> {
         // its student filled in by the database JOIN, so a rename needs no
         // synchronising here.
         _records = results[1] as List<AchievementRecord>;
+        final byStudent = <int, List<AchievementRecord>>{};
+        for (final record in _records) {
+          (byStudent[record.studentId] ??= []).add(record);
+        }
+        _recordsByStudent = byStudent;
+        _seenStudentsRevision = StudentStorage.revision;
+        _seenAchievementsRevision = AchievementStorage.revision;
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() => _loading = false);
       _toast('Could not load achievements from this device.');
+    }
+  }
+
+  /// Hands [value] back unchanged, as a `Future`, so [Future.wait] above can
+  /// mix a real read with a table this call does not need to re-read.
+  static Future<T> _identity<T>(T value) => Future.value(value);
+
+  /// Refreshes after the detail screen added, edited or deleted an award of
+  /// [studentId]: re-reads only that student's rows and patches them into the
+  /// lists already in memory, instead of reading every student's awards again.
+  ///
+  /// The shortcut is only taken when this one edit is provably the only thing
+  /// that changed: the registry is untouched, and exactly one achievement
+  /// mutation has happened since the last full read. Anything else (a student
+  /// edited or deleted, a backup imported, an unexpected revision jump) falls
+  /// back to [_load], which re-reads whatever actually moved on.
+  Future<void> _reloadStudent(int studentId) async {
+    final seen = _seenAchievementsRevision;
+    final revisionNow = AchievementStorage.revision;
+    final onlyThisEdit =
+        seen != null &&
+        seen + 1 == revisionNow &&
+        _seenStudentsRevision == StudentStorage.revision;
+    if (!onlyThisEdit) return _load();
+    try {
+      final fresh = await _achievementStorage.loadForStudent(studentId);
+      if (!mounted) return;
+      // Something else saved while this read was running; its rows may not be
+      // in `fresh`, so do the full, always-correct read instead.
+      if (AchievementStorage.revision != revisionNow) {
+        await _load();
+        return;
+      }
+      setState(() {
+        _records = [
+          for (final record in _records)
+            if (record.studentId != studentId) record,
+          ...fresh,
+        ];
+        if (fresh.isEmpty) {
+          _recordsByStudent.remove(studentId);
+        } else {
+          _recordsByStudent[studentId] = fresh;
+        }
+        _seenAchievementsRevision = revisionNow;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      _toast('Could not refresh the achievements from this device.');
     }
   }
 
@@ -92,10 +175,8 @@ class _AchievementScreenState extends State<AchievementScreen> {
   }
 
   /// This student records, as handed to the detail screen.
-  List<AchievementRecord> _recordsFor(int? studentId) => [
-    for (final record in _records)
-      if (record.studentId == studentId) record,
-  ];
+  List<AchievementRecord> _recordsFor(int? studentId) =>
+      _recordsByStudent[studentId] ?? const [];
 
   /// Opens one student records, handing the detail screen only that student
   /// slice of the achievements.
@@ -110,7 +191,7 @@ class _AchievementScreenState extends State<AchievementScreen> {
         builder: (_) => AchievementDetailScreen(
           student: student,
           records: _recordsFor(studentId),
-          onChanged: _load,
+          onChanged: () => _reloadStudent(studentId),
         ),
       ),
     );
@@ -145,59 +226,84 @@ class _AchievementScreenState extends State<AchievementScreen> {
       children: [
         const BrandHeader(),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              const Text(
-                'Achievement Record',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 12),
-              // The search box leads the list.
-              _searchBox(),
-              const SizedBox(height: 20),
-              const Text(
-                'List of Students',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.black,
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Achievement Record',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // The search box leads the list.
+                      _searchBox(),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'List of Students',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _countLabel(results.length, total),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.muted,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_loading)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 48),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      else if (_students.isEmpty)
+                        const EmptyStateCard(
+                          icon: Icons.groups_outlined,
+                          title: 'No students yet',
+                          message:
+                              'Add a student on the Students page first, then come '
+                              'back to record their achievement.',
+                        )
+                      else if (results.isEmpty)
+                        const EmptyStateCard(
+                          icon: Icons.search_off,
+                          title: 'No matching students',
+                          message: 'Try a different name, nickname or school.',
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 2),
-              Text(
-                _countLabel(results.length, total),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: AppColors.muted),
-              ),
-              const SizedBox(height: 12),
-              if (_loading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 48),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else if (_students.isEmpty)
-                const EmptyStateCard(
-                  icon: Icons.groups_outlined,
-                  title: 'No students yet',
-                  message:
-                      'Add a student on the Students page first, then come '
-                      'back to record their achievement.',
-                )
-              else if (results.isEmpty)
-                const EmptyStateCard(
-                  icon: Icons.search_off,
-                  title: 'No matching students',
-                  message: 'Try a different name, nickname or school.',
-                )
-              else
-                for (final student in results)
-                  _StudentCard(
-                    student: student,
-                    records: _recordsFor(student.id),
-                    onTap: () => _openStudent(student),
+              if (!_loading && results.isNotEmpty)
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final student = results[index];
+                        return _StudentCard(
+                          student: student,
+                          records: _recordsFor(student.id),
+                          onTap: () => _openStudent(student),
+                        );
+                      },
+                      childCount: results.length,
+                    ),
                   ),
+                ),
             ],
           ),
         ),

@@ -3,21 +3,35 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tkd_app/models/belt.dart';
 
 void main() {
-  test('the curriculum runs from 9th Grade White to 3rd Dan Blackbelt', () {
-    expect(BeltCatalog.grades, hasLength(12));
-    expect(BeltCatalog.grades.first, '9th Grade White');
-    expect(BeltCatalog.grades.last, '3rd Dan Blackbelt');
-    expect(BeltCatalog.grades, contains('1st Grade Brown'));
+  test('the Belt menu lists the grades in the required order', () {
+    expect(BeltCatalog.grades, const [
+      '3rd Dan Blackbelt',
+      '2nd Dan Blackbelt',
+      '1st Dan Blackbelt',
+      '1st Grade Brown',
+      '2nd Grade Brown',
+      '3rd Grade Red',
+      '4th Grade Red',
+      '5th Grade Blue',
+      '6th Grade Blue',
+      '7th Grade Yellow',
+      '8th Grade Yellow',
+      '9th Grade White',
+    ]);
 
-    // The Belt menu offers the grades in promotion order, lowest first.
-    expect(
-      BeltCatalog.rankOf('9th Grade White'),
-      lessThan(BeltCatalog.rankOf('1st Dan Blackbelt')),
-    );
+    // The list order is also the sort order of the promotion list.
     expect(
       BeltCatalog.rankOf('1st Dan Blackbelt'),
-      lessThan(BeltCatalog.rankOf('3rd Dan Blackbelt')),
+      lessThan(BeltCatalog.rankOf('9th Grade White')),
     );
+    expect(
+      BeltCatalog.rankOf('3rd Dan Blackbelt'),
+      lessThan(BeltCatalog.rankOf('1st Dan Blackbelt')),
+    );
+
+    // A new record still starts on the entry-level belt.
+    expect(BeltCatalog.defaultGrade, '9th Grade White');
+    expect(BeltCatalog.grades, contains(BeltCatalog.defaultGrade));
   });
 
   test('there is one Quick Card per belt colour, strongest first', () {
