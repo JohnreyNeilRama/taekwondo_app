@@ -479,7 +479,7 @@ void main() {
     },
   );
 
-  testWidgets('The "moved to Trash / Undo" message goes away by itself', (
+  testWidgets('The "moved to Trash / Undo" message stays until the owner chooses', (
     WidgetTester tester,
   ) async {
     await _startApp(tester);
@@ -504,12 +504,17 @@ void main() {
     expect(find.text('Nguyen Van A moved to Trash'), findsOneWidget);
     expect(find.text('Undo'), findsOneWidget);
 
-    // Nobody taps it: after its display time it has to leave on its own.
-    await tester.pump(const Duration(seconds: 6));
-    await tester.pump(const Duration(milliseconds: 500));
+    // Nobody taps it: the owner has to choose, so it is still up long after
+    // an ordinary message would have gone.
+    await tester.pump(const Duration(seconds: 10));
+    expect(find.text('Nguyen Van A moved to Trash'), findsOneWidget);
+    expect(find.text('Undo'), findsOneWidget);
+
+    // A tap anywhere else on the screen closes it, and the deletion stands.
+    await tester.tap(find.text('All Students'));
+    await _settle(tester);
     expect(find.text('Nguyen Van A moved to Trash'), findsNothing);
     expect(find.text('Undo'), findsNothing);
-    // The deletion itself stays in place.
     expect(find.text('0 records'), findsOneWidget);
   });
 

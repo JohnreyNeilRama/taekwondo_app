@@ -241,7 +241,7 @@ void main() {
   });
 
   group('the app shell', () {
-    testWidgets('opens behind the password with four destinations, no Profile', (
+    testWidgets('opens behind the password with five destinations, no Profile', (
       WidgetTester tester,
     ) async {
       // The width of an ordinary phone, so the bar is checked at the size it
@@ -260,7 +260,7 @@ void main() {
 
       final bar = find.byType(BottomNavigationBar);
       expect(bar, findsOneWidget);
-      for (final label in ['Students', 'Promotion', 'Achievement', 'Data']) {
+      for (final label in ['Students', 'Promotion', 'Scan', 'Achievement', 'Data']) {
         expect(
           find.descendant(of: bar, matching: find.text(label)),
           findsOneWidget,
@@ -272,12 +272,13 @@ void main() {
       expect(find.text('Change Password'), findsNothing);
       expect(
         tester.widget<BottomNavigationBar>(bar).items,
-        hasLength(4),
+        hasLength(5),
       );
-      // Four labels fit the bar without pushing anything out of it.
+      // Five labels fit the bar without pushing anything out of it.
       expect(tester.takeException(), isNull);
 
-      // Every remaining destination still opens.
+      // Every remaining page destination still opens (Scan is left out: it
+      // starts the camera, which a test has none of).
       for (final label in ['Promotion', 'Achievement', 'Data', 'Students']) {
         await tester.tap(find.text(label).last);
         await _settle(tester);

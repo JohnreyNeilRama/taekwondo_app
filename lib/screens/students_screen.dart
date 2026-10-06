@@ -243,6 +243,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   /// The database mints the registry number and returns the saved record, so
   /// the card shows the id every later change goes through.
   Future<void> _addStudent() async {
+    _dismissUndoBar();
     final student = await Navigator.of(context).push<Student>(
       MaterialPageRoute(builder: (_) => const AddStudentScreen()),
     );
@@ -276,6 +277,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   /// updated [Student] after editing, or `'delete'` after a confirmed
   /// deletion from the detail screen.
   Future<void> _openStudent(Student student) async {
+    _dismissUndoBar();
     final result = await Navigator.of(context).push<dynamic>(
       MaterialPageRoute(builder: (_) => StudentDetailScreen(student: student)),
     );
@@ -292,6 +294,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   /// Opens the form directly in edit mode and applies the returned
   /// record, mirroring the edit flow of the detail screen.
   Future<void> _editStudent(Student student) async {
+    _dismissUndoBar();
     final updated = await Navigator.of(context).push<Student>(
       MaterialPageRoute(builder: (_) => AddStudentScreen(initial: student)),
     );
@@ -371,6 +374,18 @@ class _StudentsScreenState extends State<StudentsScreen> {
     }
   }
 
+  /// The Undo message of the last deletion, while it is on screen.
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _undoBar;
+
+  /// Closes the Undo message, so the deletion stands. Called when the owner
+  /// taps anywhere else on the screen or leaves for another page.
+  void _dismissUndoBar() {
+    final bar = _undoBar;
+    if (bar == null) return;
+    _undoBar = null;
+    bar.close();
+  }
+
   /// Takes [student] off the list and offers the Undo snackbar. The card is
   /// removed by id, not by a position read before the database finished, so a
   /// list that changed in the meantime can never lose the wrong card.
@@ -379,23 +394,23 @@ class _StudentsScreenState extends State<StudentsScreen> {
       _localWrites++;
       _students.removeWhere((s) => s.id == student.id);
     });
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text('${student.name} moved to Trash'),
-          // A snackbar with an action stays on screen until it is tapped
-          // unless `persist` is switched off, so the Undo message would never
-          // go away by itself. It now leaves after five seconds; tapping Undo
-          // within that time still restores the student.
-          persist: false,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'Undo',
-            onPressed: () => _undoDelete(student),
-          ),
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    // With an action, the message stays until the owner chooses: Undo brings
+    // the student back, and tapping anywhere else on the screen closes it and
+    // keeps the deletion (see the Listener in build).
+    final bar = messenger.showSnackBar(
+      SnackBar(
+        content: Text('${student.name} moved to Trash'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () => _undoDelete(student),
         ),
-      );
+      ),
+    );
+    _undoBar = bar;
+    bar.closed.then((_) {
+      if (identical(_undoBar, bar)) _undoBar = null;
+    });
   }
 
   /// The ids of the students a swipe has already moved to the Trash in the
@@ -445,6 +460,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   /// Opens the Trash. Restoring a student there changes the registry, so the
   /// list is read again when the page is closed.
   Future<void> _openTrash() async {
+    _dismissUndoBar();
     await Navigator.of(context)
         .push<void>(MaterialPageRoute(builder: (_) => const TrashScreen()));
     if (!mounted) return;
@@ -492,7 +508,12 @@ class _StudentsScreenState extends State<StudentsScreen> {
         ? '$count result${count == 1 ? '' : 's'} for "${_query.trim()}"'
         : '$count record${count == 1 ? '' : 's'}';
 
-    return Column(
+    return Listener(
+      // Any tap on the screen (outside the Undo message itself) closes the
+      // Undo message of a deletion, so the deletion stands.
+      behavior: HitTestBehavior.translucent,
+      onPointerDown: (_) => _dismissUndoBar(),
+      child: Column(
       children: [
         BrandHeader(
           // The Trash button sits in the upper-right corner of the page.
@@ -590,6 +611,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
           ),
         ),
       ],
+      ),
     );
   }
 }

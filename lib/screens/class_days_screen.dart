@@ -459,6 +459,11 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
                   ? 'Training cancelled on $when.'
                   : 'Cancellation removed for $when.',
             ),
+            // A snackbar with an action stays until it is tapped unless
+            // `persist` is switched off. Undo is a quick "oops" button, so the
+            // message goes away after two seconds.
+            persist: false,
+            duration: const Duration(seconds: 2),
             action: SnackBarAction(
               label: 'Undo',
               onPressed: () => _toggleCancelled(date),
