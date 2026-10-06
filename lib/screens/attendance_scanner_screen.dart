@@ -1,3 +1,4 @@
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,6 +27,9 @@ class AttendanceScannerScreen extends StatefulWidget {
 class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   final AttendanceStorage _storage = AttendanceStorage();
 
+  /// Plays the short confirmation beep when a check-in is recorded.
+  final AudioPlayer _beep = AudioPlayer();
+
   List<AttendanceEntry> _today = const [];
   CheckInResult? _last;
 
@@ -50,7 +54,32 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   @override
   void initState() {
     super.initState();
+    _prepareBeep();
     _loadToday();
+  }
+
+  @override
+  void dispose() {
+    _beep.dispose();
+    super.dispose();
+  }
+
+  /// Asks for the low-latency player so the beep follows the scan at once.
+  Future<void> _prepareBeep() async {
+    try {
+      await _beep.setPlayerMode(PlayerMode.lowLatency);
+    } catch (_) {
+      // Sound is a nicety: a device without audio must not stop attendance.
+    }
+  }
+
+  /// The confirmation beep for a newly recorded check-in. Any audio problem
+  /// (no sound device, a missing file) is ignored on purpose.
+  Future<void> _playBeep() async {
+    try {
+      await _beep.stop();
+      await _beep.play(AssetSource('sound/beep.mp3'));
+    } catch (_) {}
   }
 
   Future<void> _loadToday() async {
@@ -72,6 +101,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
       if (!mounted) return;
       if (result.status == CheckInStatus.recorded) {
         HapticFeedback.mediumImpact();
+        _playBeep();
       }
       setState(() => _last = result);
       if (result.status == CheckInStatus.recorded) await _loadToday();
