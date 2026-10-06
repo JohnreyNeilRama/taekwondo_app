@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/student.dart';
 import '../services/attendance_storage.dart';
+import '../services/class_schedule.dart';
 import '../theme/app_theme.dart';
 import '../widgets/student_avatar.dart';
 
@@ -104,7 +105,8 @@ class _StudentAttendanceCalendarScreenState
       );
   }
 
-  /// Shows the check-in on [day], or records / removes one.
+  /// Shows the check-in on [day], records / removes one, or marks the club
+  /// training cancelled.
   Future<void> _onDayTap(int day) async {
     if (_busy) return;
     final student = widget.student;
@@ -112,14 +114,42 @@ class _StudentAttendanceCalendarScreenState
     if (id == null) return;
 
     final date = DateTime(_month.year, _month.month, day);
+    final isFuture = date.isAfter(_today);
     final label = _longDate(date);
     final name = student.name.trim().isEmpty
         ? 'this student'
         : student.name.trim();
+    final cancelled = _data?.cancelledDays.contains(day) ?? false;
     final record = _data?.presentByDay[day];
 
+    if (cancelled) {
+      final restore = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Training cancelled'),
+          content: Text(
+            'Training on $label is cancelled. This day is not counted as '
+            'present or absent for anyone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Close'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Remove cancellation'),
+            ),
+          ],
+        ),
+      );
+      if (restore != true || !mounted) return;
+      await _setCancelled(date, false);
+      return;
+    }
+
     if (record != null) {
-      final confirmed = await showDialog<bool>(
+      final choice = await showDialog<String>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Check-in'),
@@ -129,18 +159,27 @@ class _StudentAttendanceCalendarScreenState
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Close'),
             ),
             TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('cancel'),
+              child: const Text('Training cancelled'),
+            ),
+            TextButton(
               style: TextButton.styleFrom(foregroundColor: AppColors.red),
-              onPressed: () => Navigator.of(dialogContext).pop(true),
+              onPressed: () => Navigator.of(dialogContext).pop('remove'),
               child: const Text('Remove check-in'),
             ),
           ],
         ),
       );
-      if (confirmed != true || !mounted) return;
+      if (!mounted) return;
+      if (choice == 'cancel') {
+        await _setCancelled(date, true);
+        return;
+      }
+      if (choice != 'remove') return;
 
       setState(() => _busy = true);
       try {
@@ -157,24 +196,40 @@ class _StudentAttendanceCalendarScreenState
       return;
     }
 
-    final confirmed = await showDialog<bool>(
+    final choice = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Mark present?'),
-        content: Text('Record a check-in for $name on $label?'),
+        title: Text(isFuture ? label : 'Mark present?'),
+        content: Text(
+          isFuture
+              ? 'Training can be cancelled for $label. Check-ins can be '
+                  'added once the day has started.'
+              : 'Record a check-in for $name on $label, or cancel training '
+                  'for everyone.',
+        ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Close'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Mark present'),
+            onPressed: () => Navigator.of(dialogContext).pop('cancel'),
+            child: const Text('Training cancelled'),
           ),
+          if (!isFuture)
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop('present'),
+              child: const Text('Mark present'),
+            ),
         ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (!mounted) return;
+    if (choice == 'cancel') {
+      await _setCancelled(date, true);
+      return;
+    }
+    if (choice != 'present') return;
 
     setState(() => _busy = true);
     try {
@@ -199,6 +254,21 @@ class _StudentAttendanceCalendarScreenState
     }
   }
 
+  Future<void> _setCancelled(DateTime date, bool cancelled) async {
+    setState(() => _busy = true);
+    try {
+      await ClassSchedule().setCancelled(date, cancelled);
+      await _load();
+      _toast(
+        cancelled ? 'Training cancelled' : 'Cancellation removed',
+      );
+    } catch (_) {
+      _toast('Could not update the cancelled day. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -218,12 +288,12 @@ class _StudentAttendanceCalendarScreenState
                   _data?.scheduleSet == false
                       ? 'Set the class days from Attendance so missed classes '
                           'can be shown. They are not guessed from who was '
-                          'scanned. Tap a day to add or remove a check-in.'
-                      : 'Tap a day to see the check-in time, or to add or '
-                          'remove attendance. Absent means a scheduled class '
-                          'day this student missed, counted from the day they '
-                          'were enrolled. Today is not counted as absent until '
-                          'the day ends.',
+                          'scanned. Tap a day to add or remove a check-in, or '
+                          'to mark training cancelled.'
+                      : 'Tap a day to add or remove a check-in, or to mark '
+                          'training cancelled. A cancelled day is yellow and '
+                          'is not counted as present or absent. Today is not '
+                          'counted as absent until the day ends.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
@@ -412,29 +482,41 @@ class _StudentAttendanceCalendarScreenState
     final date = DateTime(_month.year, _month.month, day);
     final isToday = date == today;
     final isFuture = date.isAfter(today);
-    final present = _data?.presentDays.contains(day) ?? false;
-    final absent = _data?.absentDays.contains(day) ?? false;
+    final cancelled = _data?.cancelledDays.contains(day) ?? false;
+    final present = !cancelled && (_data?.presentDays.contains(day) ?? false);
+    final absent = !cancelled && (_data?.absentDays.contains(day) ?? false);
 
-    final Color? fill = present
+    final Color? fill = cancelled
+        ? AppColors.cancelled
+        : present
         ? _presentGreen
         : absent
         ? AppColors.red
         : null;
-    final status = present
+    final status = cancelled
+        ? 'training cancelled'
+        : present
         ? 'present'
         : absent
         ? 'absent'
         : 'no record';
+    final onFill = cancelled
+        ? AppColors.onCancelled
+        : fill != null
+        ? Colors.white
+        : isFuture
+        ? AppColors.muted
+        : AppColors.black;
 
     return Semantics(
-      button: !isFuture,
-      enabled: !isFuture,
+      button: true,
+      enabled: !_busy,
       label: '${_monthNames[_month.month - 1]} $day, $status',
       excludeSemantics: true,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: isFuture || _busy ? null : () => _onDayTap(day),
+          onTap: _busy ? null : () => _onDayTap(day),
           borderRadius: BorderRadius.circular(10),
           child: Ink(
             decoration: BoxDecoration(
@@ -452,11 +534,7 @@ class _StudentAttendanceCalendarScreenState
                   fontWeight: fill != null || isToday
                       ? FontWeight.w700
                       : FontWeight.w500,
-                  color: fill != null
-                      ? Colors.white
-                      : isFuture
-                      ? AppColors.muted
-                      : AppColors.black,
+                  color: onFill,
                 ),
               ),
             ),
@@ -498,6 +576,7 @@ class _StudentAttendanceCalendarScreenState
       children: [
         item(_presentGreen, 'Present'),
         item(AppColors.red, 'Absent'),
+        item(AppColors.cancelled, 'Training cancelled'),
         item(null, 'Today', outlined: true),
       ],
     );

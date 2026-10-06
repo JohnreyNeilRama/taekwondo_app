@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/student.dart';
 import '../services/attendance_storage.dart';
+import '../services/class_schedule.dart';
 import '../theme/app_theme.dart';
 import '../widgets/student_avatar.dart';
 import 'class_days_screen.dart';
@@ -76,6 +77,26 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     if (saved == true && mounted) _load();
   }
 
+  Future<void> _toggleCancelled() async {
+    final cancelled = _report?.trainingCancelled ?? false;
+    try {
+      await ClassSchedule().setCancelled(_day, !cancelled);
+      if (!mounted) return;
+      await _load();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not update the cancelled day. Please try again.',
+            ),
+          ),
+        );
+    }
+  }
+
   Future<void> _pickDay() async {
     final today = DateTime.now();
     final picked = await showDatePicker(
@@ -136,6 +157,20 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                tooltip: _report?.trainingCancelled == true
+                    ? 'Remove training cancelled'
+                    : 'Training cancelled',
+                icon: Icon(
+                  _report?.trainingCancelled == true
+                      ? Icons.event_busy
+                      : Icons.event_busy_outlined,
+                  color: _report?.trainingCancelled == true
+                      ? AppColors.cancelled
+                      : Colors.white,
+                ),
+                onPressed: _report == null ? null : _toggleCancelled,
               ),
               IconButton(
                 tooltip: 'Class days',
@@ -254,6 +289,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     }
 
     final heldClass = report.sessionHeld;
+    final cancelled = report.trainingCancelled;
     return DefaultTabController(
       length: 2,
       child: Column(
@@ -270,8 +306,16 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                 fontWeight: FontWeight.w700,
               ),
               tabs: [
-                Tab(text: 'Present (${report.present.length})'),
-                Tab(text: 'Absent (${heldClass ? report.absent.length : '-'})'),
+                Tab(
+                  text: cancelled
+                      ? 'Present (-)'
+                      : 'Present (${report.present.length})',
+                ),
+                Tab(
+                  text: cancelled
+                      ? 'Absent (-)'
+                      : 'Absent (${heldClass ? report.absent.length : '-'})',
+                ),
               ],
             ),
           ),
@@ -287,6 +331,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   }
 
   Widget _summary(AttendanceReport report) {
+    final cancelled = report.trainingCancelled;
     final heldClass = report.sessionHeld;
     final rate = heldClass && report.total > 0
         ? '${(report.present.length * 100 / report.total).round()}%'
@@ -325,7 +370,11 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
-          box('Present', '${report.present.length}', const Color(0xFF15803D)),
+          box(
+            'Present',
+            cancelled ? '-' : '${report.present.length}',
+            const Color(0xFF15803D),
+          ),
           const SizedBox(width: 8),
           box(
             'Absent',
@@ -340,6 +389,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   }
 
   Widget _presentList(AttendanceReport report) {
+    if (report.trainingCancelled) {
+      return _cancelledMessage();
+    }
     if (report.present.isEmpty) {
       return _message(
         report.total == 0
@@ -363,6 +415,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   }
 
   Widget _absentList(AttendanceReport report) {
+    if (report.trainingCancelled) {
+      return _cancelledMessage();
+    }
     if (!report.scheduleSet) {
       return _message(
         'Set the weekdays classes run so absences can be counted. '
@@ -405,6 +460,15 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           trailingColor: AppColors.red,
         );
       },
+    );
+  }
+
+  Widget _cancelledMessage() {
+    return _message(
+      'Training was cancelled on this day. It is not counted as present or '
+      'absent, even if it is a regular class weekday.',
+      action: 'Remove cancellation',
+      onAction: _toggleCancelled,
     );
   }
 

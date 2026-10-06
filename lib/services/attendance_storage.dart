@@ -50,6 +50,7 @@ class AttendanceReport {
     required this.absent,
     required this.sessionHeld,
     required this.scheduleSet,
+    this.trainingCancelled = false,
   });
 
   /// The day the report is about.
@@ -77,6 +78,11 @@ class AttendanceReport {
   /// Whether the owner has saved class weekdays. Until they have, [sessionHeld]
   /// is false and there is no absent list: the app does not guess from scans.
   final bool scheduleSet;
+
+  /// Whether the owner marked [day] as training cancelled. A cancelled day
+  /// overrides the weekday schedule: it is neither a class nor an absence, and
+  /// [present] / [absent] are empty so it cannot change the counts.
+  final bool trainingCancelled;
 }
 
 /// One saved check-in, as listed on a student's own page.
@@ -118,6 +124,7 @@ class StudentMonthAttendance {
     required this.month,
     required this.presentByDay,
     required this.absentDays,
+    required this.cancelledDays,
     required this.scheduleSet,
   });
 
@@ -132,8 +139,13 @@ class StudentMonthAttendance {
   Set<int> get presentDays => presentByDay.keys.toSet();
 
   /// Days of the month the student missed: a scheduled class day with no
-  /// check-in, from the day they were enrolled and before today.
+  /// check-in, from the day they were enrolled and before today. Training
+  /// cancelled days are never included.
   final Set<int> absentDays;
+
+  /// Days of the month the owner marked as training cancelled. These override
+  /// the weekday schedule and are neither present nor absent.
+  final Set<int> cancelledDays;
 
   /// Whether the owner has saved class weekdays. Until they have, [absentDays]
   /// is empty: absences are not guessed from who happened to be scanned.
@@ -373,12 +385,14 @@ class AttendanceStorage {
     }
     final today = dayKey(DateTime.now());
     final schedule = await ClassSchedule.readFrom(db);
+    final cancelled = await ClassSchedule.readCancelledFrom(db);
+    final cancelledDays = ClassSchedule.cancelledDaysOfMonth(cancelled, month);
 
     final presentByDay = <int, AttendanceRecord>{};
     for (final row in mine) {
       final key = row['attended_on'] as String? ?? '';
       final day = _dayOfMonth(key);
-      if (day == null) continue;
+      if (day == null || cancelledDays.contains(day)) continue;
       presentByDay[day] = AttendanceRecord(
         id: row['id'] as int,
         day: key,
@@ -391,7 +405,11 @@ class AttendanceStorage {
 
     final absent = <int>{};
     if (schedule != null && firstDay != null) {
-      for (final date in ClassSchedule.classDaysOfMonth(schedule, month)) {
+      for (final date in ClassSchedule.classDaysOfMonth(
+        schedule,
+        month,
+        cancelled: cancelled,
+      )) {
         final key = dayKey(date);
         if (presentByDay.containsKey(date.day)) continue;
         if (key.compareTo(firstDay) >= 0 && key.compareTo(today) < 0) {
@@ -404,6 +422,7 @@ class AttendanceStorage {
       month: DateTime(month.year, month.month),
       presentByDay: presentByDay,
       absentDays: absent,
+      cancelledDays: cancelledDays,
       scheduleSet: schedule != null,
     );
   }
@@ -433,8 +452,24 @@ class AttendanceStorage {
     final db = await AppDatabase.instance.database;
     final key = dayKey(day);
     final schedule = await ClassSchedule.readFrom(db);
+    final cancelled = await ClassSchedule.readCancelledFrom(db);
     final scheduleSet = schedule != null;
-    final sessionHeld = ClassSchedule.isClassDay(schedule, day);
+    final trainingCancelled = ClassSchedule.isCancelled(cancelled, day);
+    if (trainingCancelled) {
+      return AttendanceReport(
+        day: day,
+        present: const [],
+        absent: const [],
+        sessionHeld: false,
+        scheduleSet: scheduleSet,
+        trainingCancelled: true,
+      );
+    }
+    final sessionHeld = ClassSchedule.isClassDay(
+      schedule,
+      day,
+      cancelled: cancelled,
+    );
     final rows = await db.rawQuery(
       '''
 SELECT s.id, s.uid, s.student_no, s.name, s.nickname, s.photo_base64,

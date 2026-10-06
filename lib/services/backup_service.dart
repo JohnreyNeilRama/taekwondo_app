@@ -202,8 +202,10 @@ class BackupService {
   Future<Uint8List> exportBytes() async {
     final db = await AppDatabase.instance.database;
     Set<int>? classDays;
+    Set<String> cancelledDates = const {};
     final tables = await db.transaction((txn) async {
       classDays = await ClassSchedule.readFrom(txn);
+      cancelledDates = await ClassSchedule.readCancelledFrom(txn);
       return <String, Object?>{
         'students': await txn.query('students', orderBy: 'id'),
         'promotions': await txn.query('promotions', orderBy: 'id'),
@@ -217,6 +219,8 @@ class BackupService {
       'exportedAt': DateTime.now().toUtc().toIso8601String(),
       ...tables,
       if (classDays != null) 'classDays': [...classDays!]..sort(),
+      if (cancelledDates.isNotEmpty)
+        'cancelledDates': [...cancelledDates]..sort(),
     };
     var size = 0;
     for (final table in tables.values) {
@@ -455,6 +459,19 @@ class BackupService {
       final importedDays = ClassSchedule.fromList(decoded['classDays']);
       if (importedDays != null && await ClassSchedule.readFrom(txn) == null) {
         await ClassSchedule.writeTo(txn, importedDays);
+      }
+
+      // Cancelled dates only ever add: a date already cancelled here stays,
+      // and dates the file carries that this device does not yet have are kept.
+      final importedCancelled = ClassSchedule.fromDateList(
+        decoded['cancelledDates'],
+      );
+      if (importedCancelled != null && importedCancelled.isNotEmpty) {
+        final existing = await ClassSchedule.readCancelledFrom(txn);
+        await ClassSchedule.writeCancelledTo(txn, {
+          ...existing,
+          ...importedCancelled,
+        });
       }
 
       return ImportResult(

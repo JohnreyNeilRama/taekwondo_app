@@ -38,25 +38,33 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
   final ClassSchedule _schedule = ClassSchedule();
 
   Set<int> _days = {};
+  Set<String> _cancelled = {};
+  late DateTime _month;
   bool _loaded = false;
   bool _saving = false;
+  bool _cancelledChanged = false;
 
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _month = DateTime(now.year, now.month);
     _load();
   }
 
   Future<void> _load() async {
     Set<int>? saved;
+    Set<String> cancelled = {};
     try {
       saved = await _schedule.load();
+      cancelled = await _schedule.loadCancelled();
     } catch (_) {
       // The page still opens, empty: the owner can set the days again.
     }
     if (!mounted) return;
     setState(() {
       _days = {...?saved};
+      _cancelled = cancelled;
       _loaded = true;
     });
   }
@@ -117,7 +125,11 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
             child: _loaded
                 ? ListView(
                     padding: const EdgeInsets.all(16),
-                    children: [_card()],
+                    children: [
+                      _card(),
+                      const SizedBox(height: 16),
+                      _cancelledCard(),
+                    ],
                   )
                 : const Center(child: CircularProgressIndicator()),
           ),
@@ -139,7 +151,7 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
               IconButton(
                 tooltip: 'Back',
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).maybePop(),
+                onPressed: () => Navigator.of(context).pop(_cancelledChanged),
               ),
               const SizedBox(width: 4),
               const Expanded(
@@ -155,7 +167,7 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
                       ),
                     ),
                     Text(
-                      'The weekdays classes are held',
+                      'Weekdays and cancelled training',
                       style: TextStyle(color: Color(0xFFD1D5DB), fontSize: 12),
                     ),
                   ],
@@ -232,6 +244,179 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
     );
   }
 
+  Widget _cancelledCard() {
+    final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
+    final blanks = DateTime(_month.year, _month.month, 1).weekday % 7;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Training cancelled',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: AppColors.black,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Tap any date to mark training cancelled. That day is not counted '
+            'as present or absent, even if it is a regular class weekday. Tap '
+            'again to put it back.',
+            style: TextStyle(fontSize: 13, height: 1.4, color: AppColors.muted),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Previous month',
+                icon: const Icon(Icons.chevron_left),
+                onPressed: () => setState(
+                  () => _month = DateTime(_month.year, _month.month - 1),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  '${_monthNames[_month.month - 1]} ${_month.year}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.black,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Next month',
+                icon: const Icon(Icons.chevron_right),
+                onPressed: () => setState(
+                  () => _month = DateTime(_month.year, _month.month + 1),
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              for (final label in _weekdayLabels)
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          GridView.count(
+            crossAxisCount: 7,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 6,
+            crossAxisSpacing: 6,
+            children: [
+              for (var i = 0; i < blanks; i++) const SizedBox.shrink(),
+              for (var day = 1; day <= daysInMonth; day++)
+                _cancelledDayCell(
+                  DateTime(_month.year, _month.month, day),
+                  today,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _cancelledDayCell(DateTime date, DateTime today) {
+    final key = ClassSchedule.dayKey(date);
+    final cancelled = _cancelled.contains(key);
+    final isToday = date == today;
+    final scheduled = _days.contains(date.weekday);
+
+    return Semantics(
+      button: true,
+      selected: cancelled,
+      label: '${_monthNames[date.month - 1]} ${date.day}'
+          '${cancelled ? ', training cancelled' : ''}',
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _toggleCancelled(date),
+          borderRadius: BorderRadius.circular(10),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: cancelled ? AppColors.cancelled : null,
+              borderRadius: BorderRadius.circular(10),
+              border: isToday && !cancelled
+                  ? Border.all(color: AppColors.black, width: 1.5)
+                  : scheduled && !cancelled
+                  ? Border.all(color: AppColors.border)
+                  : null,
+            ),
+            child: Center(
+              child: Text(
+                '${date.day}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: cancelled || isToday
+                      ? FontWeight.w700
+                      : FontWeight.w500,
+                  color: cancelled
+                      ? AppColors.onCancelled
+                      : AppColors.black,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _toggleCancelled(DateTime date) async {
+    final key = ClassSchedule.dayKey(date);
+    final previous = {..._cancelled};
+    final next = {..._cancelled};
+    if (!next.add(key)) next.remove(key);
+    setState(() {
+      _cancelled = next;
+      _cancelledChanged = true;
+    });
+    try {
+      await _schedule.saveCancelled(next);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _cancelled = previous);
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not update the cancelled day. Please try again.',
+            ),
+          ),
+        );
+    }
+  }
+
   Widget _buildSaveBar() {
     return Container(
       decoration: const BoxDecoration(
@@ -254,3 +439,28 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
     );
   }
 }
+
+const List<String> _monthNames = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+const List<String> _weekdayLabels = [
+  'Su',
+  'Mo',
+  'Tu',
+  'We',
+  'Th',
+  'Fr',
+  'Sa',
+];

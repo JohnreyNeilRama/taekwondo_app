@@ -12,6 +12,10 @@ class AppColors {
   static const Color border = Color(0xFFE5E5E5);
   static const Color muted = Color(0xFF6B7280);
   static const Color iconCircle = Color(0xFFEBEBEB);
+
+  /// Training cancelled: neither present nor absent.
+  static const Color cancelled = Color(0xFFEAB308);
+  static const Color onCancelled = Color(0xFF713F12);
 }
 
 ThemeData buildAppTheme() {
