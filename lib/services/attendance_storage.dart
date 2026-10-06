@@ -16,6 +16,11 @@ enum CheckInStatus {
 
   /// The code (or number) does not match any student in this registry.
   unknown,
+
+  /// Training is marked cancelled for that day, so nobody is checked in: a
+  /// cancelled day is neither present nor absent for anyone. Nothing was
+  /// written.
+  trainingCancelled,
 }
 
 /// The answer to one check-in, with the student it was about when there is one.
@@ -256,6 +261,12 @@ class AttendanceStorage {
     final day = dayKey(moment);
     final db = await AppDatabase.instance.database;
     return db.transaction((txn) async {
+      // A cancelled day overrides the schedule: no check-in is written for it,
+      // so nothing can be hidden behind the cancellation and then reappear.
+      final cancelled = await ClassSchedule.readCancelledFrom(txn);
+      if (ClassSchedule.isCancelled(cancelled, moment)) {
+        return CheckInResult(CheckInStatus.trainingCancelled, student: student);
+      }
       final existing = await txn.query(
         _table,
         columns: ['checked_in_at'],
@@ -297,9 +308,14 @@ class AttendanceStorage {
       whereArgs: [studentId],
       orderBy: 'attended_on DESC, id DESC',
     );
+    // Check-ins on a cancelled day are not counted: that day is neither
+    // present nor absent. They are kept, and count again if the cancellation
+    // is removed.
+    final cancelled = await ClassSchedule.readCancelledFrom(db);
     return AttendanceHistory(
       records: [
         for (final row in rows)
+          if (!cancelled.contains(row['attended_on']))
           () {
             final day = row['attended_on'] as String? ?? '';
             return AttendanceRecord(
@@ -515,6 +531,9 @@ ORDER BY s.name COLLATE NOCASE, s.id
   /// Everyone checked in on the day of [day], the latest first. Students who
   /// are in the Trash are left out: they have left every list.
   Future<List<AttendanceEntry>> loadDay(DateTime day) async {
+    // A cancelled day has no attendance list: nobody counts as present.
+    final cancelledDays = await ClassSchedule().loadCancelled();
+    if (ClassSchedule.isCancelled(cancelledDays, day)) return const [];
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery(
       '''

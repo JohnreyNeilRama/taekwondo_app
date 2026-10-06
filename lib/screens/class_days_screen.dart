@@ -339,8 +339,48 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
                 ),
             ],
           ),
+          const SizedBox(height: 12),
+          _legend(),
         ],
       ),
+    );
+  }
+
+  /// What the colours in the calendar above mean.
+  Widget _legend() {
+    Widget item(Color? fill, String label, {Color? border, double width = 1}) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(4),
+              border: border == null
+                  ? Border.all(color: AppColors.border)
+                  : Border.all(color: border, width: width),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          ),
+        ],
+      );
+    }
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 16,
+      runSpacing: 6,
+      children: [
+        item(AppColors.cancelled, 'Cancelled', border: AppColors.cancelled),
+        item(null, 'Class day'),
+        item(null, 'Today', border: AppColors.black, width: 1.5),
+      ],
     );
   }
 
@@ -402,6 +442,29 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
     });
     try {
       await _schedule.saveCancelled(next);
+      if (!mounted) return;
+      // Say what happened and offer to take it back: a stray tap on a yellow
+      // day would otherwise silently turn that day back into an absence for
+      // everyone.
+      final nowCancelled = next.contains(key);
+      final when =
+          '${_short[date.weekday - 1]}, ${_monthNames[date.month - 1]} '
+          '${date.day}, ${date.year}';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              nowCancelled
+                  ? 'Training cancelled on $when.'
+                  : 'Cancellation removed for $when.',
+            ),
+            action: SnackBarAction(
+              label: 'Undo',
+              onPressed: () => _toggleCancelled(date),
+            ),
+          ),
+        );
     } catch (_) {
       if (!mounted) return;
       setState(() => _cancelled = previous);

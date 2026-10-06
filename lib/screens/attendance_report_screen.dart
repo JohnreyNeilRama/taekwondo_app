@@ -396,7 +396,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       return _message(
         report.total == 0
             ? 'There are no students in the registry yet.'
-            : 'No one was checked in on this day.',
+            : 'No one was clocked in on this day.',
       );
     }
     return ListView.separated(
@@ -447,7 +447,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
             padding: EdgeInsets.only(top: 4),
             child: Text(
               'Absent lists every student who was already enrolled on this '
-              'day and was not checked in. Students who joined later are '
+              'day and was not clocked in. Students who joined later are '
               'left out.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.muted),

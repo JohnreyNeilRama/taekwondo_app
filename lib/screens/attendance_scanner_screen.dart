@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/attendance_storage.dart';
+import '../services/class_schedule.dart';
 import '../theme/app_theme.dart';
 import '../widgets/student_avatar.dart';
 import 'attendance_report_screen.dart';
@@ -31,8 +32,17 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   /// Plays the short confirmation beep when a check-in is recorded.
   final AudioPlayer _beep = AudioPlayer();
 
+  /// Plays the error sound when a student who is already clocked in today is
+  /// scanned again. A separate player, so the two sounds never cut each other
+  /// off.
+  final AudioPlayer _error = AudioPlayer();
+
   List<AttendanceEntry> _today = const [];
   CheckInResult? _last;
+
+  /// Whether the owner marked today as training cancelled. Today then has no
+  /// present list and nobody can be checked in.
+  bool _cancelledToday = false;
 
   /// True while a check-in is being written, so a camera that reports the same
   /// code many times a second cannot start a second one on top of it.
@@ -55,22 +65,28 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   @override
   void initState() {
     super.initState();
-    _prepareBeep();
+    _prepareSounds();
     _loadToday();
   }
 
   @override
   void dispose() {
     _beep.dispose();
+    _error.dispose();
     super.dispose();
   }
 
-  /// Asks for the low-latency player so the beep follows the scan at once.
-  Future<void> _prepareBeep() async {
-    try {
-      await _beep.setPlayerMode(PlayerMode.lowLatency);
-    } catch (_) {
-      // Sound is a nicety: a device without audio must not stop attendance.
+  /// Sets both players up: the low-latency mode so a sound follows the scan at
+  /// once, and full player volume. (1.0 is the most the player can do; to make
+  /// a sound louder than that, the audio file itself has to be louder.)
+  Future<void> _prepareSounds() async {
+    for (final player in [_beep, _error]) {
+      try {
+        await player.setPlayerMode(PlayerMode.lowLatency);
+        await player.setVolume(1.0);
+      } catch (_) {
+        // Sound is a nicety: a device without audio must not stop attendance.
+      }
     }
   }
 
@@ -79,15 +95,30 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   Future<void> _playBeep() async {
     try {
       await _beep.stop();
-      await _beep.play(AssetSource('sound/beep.mp3'));
+      await _beep.play(AssetSource('sound/beep.mp3'), volume: 1.0);
+    } catch (_) {}
+  }
+
+  /// The error sound for a student who is already clocked in today.
+  Future<void> _playError() async {
+    try {
+      await _error.stop();
+      await _error.play(AssetSource('sound/error.mp3'), volume: 1.0);
     } catch (_) {}
   }
 
   Future<void> _loadToday() async {
     try {
       final entries = await _storage.loadDay(DateTime.now());
+      final cancelled = ClassSchedule.isCancelled(
+        await ClassSchedule().loadCancelled(),
+        DateTime.now(),
+      );
       if (!mounted) return;
-      setState(() => _today = entries);
+      setState(() {
+        _today = entries;
+        _cancelledToday = cancelled;
+      });
     } catch (_) {
       // The list is a convenience: a read problem must not stop check-in.
     }
@@ -103,8 +134,15 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
       if (result.status == CheckInStatus.recorded) {
         HapticFeedback.mediumImpact();
         _playBeep();
+      } else if (result.status == CheckInStatus.alreadyPresent) {
+        _playError();
       }
-      setState(() => _last = result);
+      setState(() {
+        _last = result;
+        if (result.status == CheckInStatus.trainingCancelled) {
+          _cancelledToday = true;
+        }
+      });
       if (result.status == CheckInStatus.recorded) await _loadToday();
     } catch (_) {
       if (!mounted) return;
@@ -149,12 +187,16 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => const ClassDaysScreen()),
     );
+    // A day may have been cancelled or restored there.
+    if (mounted) await _loadToday();
   }
 
   Future<void> _openReport() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => const AttendanceReportScreen()),
     );
+    // The report can cancel or restore today's training.
+    if (mounted) await _loadToday();
   }
 
   Future<void> _enterNumber() async {
@@ -334,7 +376,9 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
             child: Text(
-              'Present today (${_today.length})',
+              _cancelledToday
+                  ? 'Present today (-)'
+                  : 'Present today (${_today.length})',
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
@@ -344,9 +388,12 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
           ),
           Expanded(
             child: _today.isEmpty
-                ? const Center(
+                ? Center(
                     child: Text(
-                      'No one has checked in yet today.',
+                      _cancelledToday
+                          ? 'Training is cancelled today. No one is counted '
+                                'present or absent.'
+                          : 'No one has clocked in yet today.',
                       style: TextStyle(fontSize: 13, color: AppColors.muted),
                     ),
                   )
@@ -415,19 +462,28 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
         color: const Color(0xFF15803D),
         icon: Icons.check_circle,
         title: name,
-        detail: 'Checked in at $at',
+        detail: 'Clocked In at $at',
       ),
       CheckInStatus.alreadyPresent => _Outcome(
         color: const Color(0xFFB45309),
         icon: Icons.info,
         title: name,
-        detail: 'Already checked in today at $at',
+        detail: 'Already clocked in today at $at',
       ),
       CheckInStatus.inTrash => _Outcome(
         color: AppColors.red,
         icon: Icons.block,
         title: name,
         detail: 'This student is in the Trash. Restore them first.',
+      ),
+      CheckInStatus.trainingCancelled => const _Outcome(
+        color: AppColors.cancelled,
+        foreground: AppColors.onCancelled,
+        icon: Icons.event_busy,
+        title: 'Training cancelled today',
+        detail:
+            'No one is counted present or absent. Remove the cancellation in '
+            'Class days to check students in.',
       ),
       CheckInStatus.unknown => const _Outcome(
         color: AppColors.red,
@@ -446,9 +502,13 @@ class _Outcome {
     required this.icon,
     required this.title,
     required this.detail,
+    this.foreground = Colors.white,
   });
 
   final Color color;
+
+  /// Colour of the icon and the text drawn on [color].
+  final Color foreground;
   final IconData icon;
   final String title;
   final String detail;
@@ -469,7 +529,7 @@ class _ResultBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(outcome.icon, color: Colors.white, size: 28),
+          Icon(outcome.icon, color: outcome.foreground, size: 28),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -479,8 +539,8 @@ class _ResultBanner extends StatelessWidget {
                   outcome.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: outcome.foreground,
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
                   ),
@@ -488,7 +548,7 @@ class _ResultBanner extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   outcome.detail,
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                  style: TextStyle(color: outcome.foreground, fontSize: 12),
                 ),
               ],
             ),

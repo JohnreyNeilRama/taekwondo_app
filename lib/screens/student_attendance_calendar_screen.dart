@@ -154,7 +154,7 @@ class _StudentAttendanceCalendarScreenState
         builder: (dialogContext) => AlertDialog(
           title: const Text('Check-in'),
           content: Text(
-            '$name was checked in on $label at '
+            '$name was clocked in on $label at '
             '${_formatTime(record.checkedInAt)}.',
           ),
           actions: [
