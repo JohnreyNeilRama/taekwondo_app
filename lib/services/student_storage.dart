@@ -94,6 +94,7 @@ class StudentStorage {
   static const List<String> _listColumns = [
     'id',
     'uid',
+    'created_at',
     'student_no',
     'name',
     'nickname',
@@ -179,7 +180,16 @@ class StudentStorage {
     // the same person is recognised by a later backup import whatever happens
     // to their name or registry number.
     final uid = student.uid.isEmpty ? StudentUid.generate() : student.uid;
-    final saved = student.withStudentNo(studentNo).withUid(uid);
+    // The enrolment time is stamped once, here, in local time (the same clock
+    // the attendance days use), and never changed by an edit. A record that
+    // already carries one keeps it.
+    final createdAt = student.createdAt.isEmpty
+        ? DateTime.now().toIso8601String()
+        : student.createdAt;
+    final saved = student
+        .withStudentNo(studentNo)
+        .withUid(uid)
+        .withCreatedAt(createdAt);
     final id = await db.insert(_table, saved.toMap());
     revision++;
     return saved.withId(id);
@@ -338,7 +348,10 @@ class StudentStorage {
       // The stable identity belongs to the record, not to the form: an edit can
       // never change it, and a record that was read before an update (or a form
       // that never carried the value) can never blank it.
-      ..remove('uid');
+      ..remove('uid')
+      // The enrolment time is stamped when the record is created and is never
+      // part of an edit, so a form can neither change nor blank it.
+      ..remove('created_at');
     if (student.clearPhoto) {
       map['photo_base64'] = '';
       map['photo_full_base64'] = '';

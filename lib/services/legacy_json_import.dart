@@ -64,6 +64,10 @@ class LegacyJsonImporter {
         }
         await _importPromotions(txn, promotions, idsByStudentNo);
         await _importAchievements(txn, achievements, idsByStudentNo);
+        // The old files never recorded when a student joined, so every imported
+        // student gets the same estimate the version 6 upgrade gives: the day
+        // of their first check-in when they have one, otherwise today.
+        await AppDatabase.backfillCreatedAt(txn);
       });
       // This writes straight to the tables, bypassing the storage classes'
       // own insert methods, so their revision counters have to be bumped

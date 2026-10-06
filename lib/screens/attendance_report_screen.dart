@@ -4,14 +4,16 @@ import '../models/student.dart';
 import '../services/attendance_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/student_avatar.dart';
+import 'class_days_screen.dart';
 
 /// The attendance report: pick a day and see who was present and who was
 /// absent.
 ///
 /// Present students come from the check-ins saved for that day. Absent students
 /// are every student in the registry (the Trash is left out) who has no
-/// check-in on it. A day nobody was checked in on is treated as "no class" and
-/// does not list the whole registry as absent.
+/// check-in on a scheduled class day and had already been enrolled by then; a
+/// student who joined after that day is in neither list. Whether a class was
+/// held is the owner's weekday schedule, not a guess from who was scanned.
 class AttendanceReportScreen extends StatefulWidget {
   const AttendanceReportScreen({super.key, this.initialDay});
 
@@ -65,6 +67,13 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
       _failed = false;
     });
     _load();
+  }
+
+  Future<void> _openClassDays() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ClassDaysScreen()),
+    );
+    if (saved == true && mounted) _load();
   }
 
   Future<void> _pickDay() async {
@@ -127,6 +136,11 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
                     ),
                   ],
                 ),
+              ),
+              IconButton(
+                tooltip: 'Class days',
+                icon: const Icon(Icons.calendar_view_week, color: Colors.white),
+                onPressed: _openClassDays,
               ),
             ],
           ),
@@ -349,10 +363,20 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
   }
 
   Widget _absentList(AttendanceReport report) {
+    if (!report.scheduleSet) {
+      return _message(
+        'Set the weekdays classes run so absences can be counted. '
+        'They are not guessed from who was scanned.',
+        action: 'Set class days',
+        onAction: _openClassDays,
+      );
+    }
     if (!report.sessionHeld) {
       return _message(
-        'No one was checked in on this day, so there is no absent list. '
-        'It was probably not a class day.',
+        'This is not a class day on the schedule, so there is no absent list. '
+        'A make-up class can still be checked in and will show under Present.',
+        action: 'Edit class days',
+        onAction: _openClassDays,
       );
     }
     if (report.absent.isEmpty) {
@@ -367,8 +391,9 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           return const Padding(
             padding: EdgeInsets.only(top: 4),
             child: Text(
-              'Absent lists every student in the registry who was not '
-              'checked in, including students added after this day.',
+              'Absent lists every student who was already enrolled on this '
+              'day and was not checked in. Students who joined later are '
+              'left out.',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 12, color: AppColors.muted),
             ),
@@ -383,14 +408,27 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     );
   }
 
-  Widget _message(String text) {
+  Widget _message(
+    String text, {
+    String? action,
+    VoidCallback? onAction,
+  }) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Text(
-          text,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 13, color: AppColors.muted),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+            if (action != null && onAction != null) ...[
+              const SizedBox(height: 12),
+              FilledButton(onPressed: onAction, child: Text(action)),
+            ],
+          ],
         ),
       ),
     );

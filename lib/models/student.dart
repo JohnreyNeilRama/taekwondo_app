@@ -6,6 +6,7 @@ class Student {
   const Student({
     this.id,
     this.uid = '',
+    this.createdAt = '',
     required this.name,
     this.studentNo = '',
     this.nickname = '',
@@ -51,6 +52,15 @@ class Student {
   /// renumbering. An empty value means "not stamped yet"; the storage layer
   /// fills it in on the next save and on app start.
   final String uid;
+
+  /// When this student was enrolled, as the local-time ISO 8601 text stored in
+  /// the `created_at` column (e.g. `2026-10-06T09:30:00.000`).
+  ///
+  /// The storage layer stamps it once, when the record is created, and an edit
+  /// never changes it. It is what the attendance reports use as the first day
+  /// a student can be absent. An empty value means "not stamped yet" (a record
+  /// that has not been saved).
+  final String createdAt;
 
   final String name;
 
@@ -154,6 +164,44 @@ class Student {
   Student withStudentNo(String studentNo) => Student(
     id: id,
     uid: uid,
+    createdAt: createdAt,
+    name: name,
+    studentNo: studentNo,
+    nickname: nickname,
+    homeAddress: homeAddress,
+    telephoneNos: telephoneNos,
+    cellphoneNo: cellphoneNo,
+    email: email,
+    birthDate: birthDate,
+    religion: religion,
+    sex: sex,
+    status: status,
+    schoolName: schoolName,
+    gradeYearCourse: gradeYearCourse,
+    companyNameAddress: companyNameAddress,
+    fatherName: fatherName,
+    fatherOccupation: fatherOccupation,
+    fatherOfficeAddress: fatherOfficeAddress,
+    fatherContactNos: fatherContactNos,
+    motherName: motherName,
+    motherOccupation: motherOccupation,
+    motherOfficeAddress: motherOfficeAddress,
+    motherContactNos: motherContactNos,
+    guardianName: guardianName,
+    guardianContactNos: guardianContactNos,
+    previousMartialArts: previousMartialArts,
+    otherHobbiesSports: otherHobbiesSports,
+    healthConditions: healthConditions,
+    photoBase64: photoBase64,
+    photoFullBase64: photoFullBase64,
+  );
+
+  /// Copy of this record carrying the enrolment time the storage layer
+  /// stamped on it. Set once while a record is being created.
+  Student withCreatedAt(String createdAt) => Student(
+    id: id,
+    uid: uid,
+    createdAt: createdAt,
     name: name,
     studentNo: studentNo,
     nickname: nickname,
@@ -189,6 +237,7 @@ class Student {
   Student withId(int id) => Student(
     id: id,
     uid: uid,
+    createdAt: createdAt,
     name: name,
     studentNo: studentNo,
     nickname: nickname,
@@ -226,6 +275,7 @@ class Student {
   Map<String, Object?> toMap() => {
     if (id != null) 'id': id,
     'uid': uid,
+    'created_at': createdAt,
     'student_no': studentNo,
     'name': name,
     'nickname': nickname,
@@ -262,6 +312,7 @@ class Student {
   factory Student.fromMap(Map<String, Object?> map) => Student(
     id: map['id'] as int?,
     uid: _text(map['uid']),
+    createdAt: _text(map['created_at']),
     name: _text(map['name']),
     studentNo: _text(map['student_no']),
     nickname: _text(map['nickname']),
@@ -338,6 +389,7 @@ class Student {
   Student withUid(String uid) => Student(
     id: id,
     uid: uid,
+    createdAt: createdAt,
     name: name,
     studentNo: studentNo,
     nickname: nickname,

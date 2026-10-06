@@ -8,6 +8,7 @@ import '../services/attendance_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/student_avatar.dart';
 import 'attendance_report_screen.dart';
+import 'class_days_screen.dart';
 
 /// The attendance screen: the phone camera reads a student's QR code, the
 /// student is checked in for today, and the list underneath shows everyone who
@@ -144,6 +145,12 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
     _run(() => _storage.checkInScanned(scanned));
   }
 
+  Future<void> _openClassDays() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const ClassDaysScreen()),
+    );
+  }
+
   Future<void> _openReport() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => const AttendanceReportScreen()),
@@ -218,6 +225,11 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
                 tooltip: 'Attendance report',
                 icon: const Icon(Icons.event_note_outlined, color: Colors.white),
                 onPressed: _openReport,
+              ),
+              IconButton(
+                tooltip: 'Class days',
+                icon: const Icon(Icons.calendar_view_week, color: Colors.white),
+                onPressed: _openClassDays,
               ),
               IconButton(
                 tooltip: 'Enter student number',

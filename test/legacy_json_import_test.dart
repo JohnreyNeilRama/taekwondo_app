@@ -175,4 +175,20 @@ void main() {
     expect(await file.exists(), isTrue);
     expect(await file.readAsString(), before);
   });
+
+  test('imported students are given an enrolment time', () async {
+    await writeLegacy('students_v1.json', [
+      {'name': 'Nguyen Van A', 'studentNo': 'TKD-0001'},
+      {'name': 'Tran Thi B', 'studentNo': 'TKD-0002'},
+    ]);
+
+    expect(await LegacyJsonImporter().importIfNeeded(), 2);
+
+    // The old files never held a join date, so each student is stamped by the
+    // import instead of being left without one.
+    for (final student in await students.loadStudents()) {
+      expect(student.createdAt, isNotEmpty, reason: student.name);
+      expect(DateTime.tryParse(student.createdAt), isNotNull);
+    }
+  });
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../models/student.dart';
+import '../services/attendance_storage.dart';
 import '../theme/app_theme.dart';
 import '../widgets/attendance_history_card.dart';
 import '../widgets/student_avatar.dart';
 import 'add_student_screen.dart';
+import 'student_attendance_calendar_screen.dart';
 import 'student_qr_screen.dart';
 
 /// Read-only view of one student's full information sheet.
@@ -12,10 +14,21 @@ import 'student_qr_screen.dart';
 /// Pops with an updated [Student] after an edit, or with the string
 /// `'delete'` after the delete confirmation is accepted. The students
 /// list screen interprets both results.
-class StudentDetailScreen extends StatelessWidget {
+class StudentDetailScreen extends StatefulWidget {
   const StudentDetailScreen({super.key, required this.student});
 
   final Student student;
+
+  @override
+  State<StudentDetailScreen> createState() => _StudentDetailScreenState();
+}
+
+class _StudentDetailScreenState extends State<StudentDetailScreen> {
+  Student get student => widget.student;
+
+  /// Bumped when the calendar may have added or removed a check-in, so the
+  /// attendance card below reloads.
+  int _attendanceStamp = 0;
 
   Future<void> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -51,6 +64,19 @@ class StudentDetailScreen extends StatelessWidget {
     );
   }
 
+  /// Opens this student's attendance calendar: present and absent days by
+  /// month. Reloads the attendance card afterwards, in case a day was added
+  /// or removed by hand.
+  Future<void> _showCalendar(BuildContext context) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => StudentAttendanceCalendarScreen(student: student),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _attendanceStamp = AttendanceStorage.revision);
+  }
+
   Future<void> _edit(BuildContext context) async {
     final updated = await Navigator.of(context).push<Student>(
       MaterialPageRoute(builder: (_) => AddStudentScreen(initial: student)),
@@ -73,6 +99,7 @@ class StudentDetailScreen extends StatelessWidget {
               children: [
                 if (student.id != null) ...[
                   AttendanceHistoryCard(
+                    key: ValueKey(_attendanceStamp),
                     studentId: student.id!,
                     studentName: student.name,
                   ),
@@ -176,6 +203,16 @@ class StudentDetailScreen extends StatelessWidget {
                 tooltip: 'QR code',
                 icon: const Icon(Icons.qr_code_2, color: Colors.white),
                 onPressed: () => _showQr(context),
+              ),
+              IconButton(
+                tooltip: 'Attendance calendar',
+                icon: const Icon(
+                  Icons.calendar_month_outlined,
+                  color: Colors.white,
+                ),
+                onPressed: student.id == null
+                    ? null
+                    : () => _showCalendar(context),
               ),
               IconButton(
                 tooltip: 'Edit',

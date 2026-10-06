@@ -15,7 +15,7 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const String _dbName = 'tkd_app.db';
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 6;
 
   /// A small key/value table for bookkeeping. Registry numbers no longer use
   /// it — `StudentStorage` keeps them sequential itself — but the table stays,
@@ -131,7 +131,8 @@ CREATE TABLE students (
   photo_base64          TEXT    NOT NULL DEFAULT '',
   photo_full_base64     TEXT    NOT NULL DEFAULT '',
   deleted_at            TEXT    NOT NULL DEFAULT '',
-  uid                   TEXT    NOT NULL DEFAULT ''
+  uid                   TEXT    NOT NULL DEFAULT '',
+  created_at            TEXT    NOT NULL DEFAULT ''
 )
 ''');
 
@@ -207,7 +208,49 @@ CREATE TABLE achievements (
           await db.execute(_createAttendanceTable);
           await db.execute(_createAttendanceIndex);
         }
+        // Version 6 adds the day a student was enrolled, which is what lets the
+        // attendance reports count a student absent only for classes held after
+        // they joined. Additive only. Students saved before this version have no
+        // recorded date, so each gets the best one the data holds (see
+        // [backfillCreatedAt]); every student added from now on is stamped when
+        // the record is created.
+        if (oldVersion < 6) {
+          await db.execute(
+            "ALTER TABLE students ADD COLUMN created_at "
+            "TEXT NOT NULL DEFAULT ''",
+          );
+          await backfillCreatedAt(db);
+        }
       },
+    );
+  }
+
+  /// Gives every student who has no enrolment date one.
+  ///
+  /// The registry never recorded when students joined, so for them the date is
+  /// an estimate: the day of their first check-in when they have one (they were
+  /// certainly enrolled by then), otherwise [now], which means their absences
+  /// are counted from today on. Students who already have a date are left
+  /// alone, so this is safe to run again.
+  ///
+  /// Used by the version 6 upgrade, and after an import that brings in
+  /// students from a backup or file that did not carry the date.
+  static Future<void> backfillCreatedAt(
+    DatabaseExecutor db, {
+    DateTime? now,
+  }) async {
+    final moment = (now ?? DateTime.now()).toIso8601String();
+    await db.rawUpdate(
+      '''
+UPDATE students
+SET created_at = COALESCE(
+  (SELECT MIN(a.attended_on) FROM attendance a
+   WHERE a.student_id = students.id) || 'T00:00:00.000',
+  ?
+)
+WHERE created_at = ''
+''',
+      [moment],
     );
   }
 

@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:tkd_app/services/app_database.dart';
@@ -50,10 +53,11 @@ void main() {
       expect(names[1], 'student_no');
       expect(names[2], 'name');
       // The three above plus the 25 remaining sheet columns, the two photo
-      // columns (the compact copy and the original), the Trash mark and the
-      // stable identity.
-      expect(names, hasLength(32));
+      // columns (the compact copy and the original), the Trash mark, the
+      // stable identity and the enrolment time.
+      expect(names, hasLength(33));
       expect(names, contains('uid'));
+      expect(names, contains('created_at'));
     },
   );
 
@@ -107,5 +111,86 @@ void main() {
     final db = await AppDatabase.instance.database;
     final rows = await db.rawQuery('PRAGMA foreign_keys');
     expect(rows.first.values.first, 1);
+  });
+
+  test('upgrading a version 5 database adds created_at and fills it in',
+      () async {
+    final folder = await Directory.systemTemp.createTemp('tkd_app_v6_test');
+    addTearDown(() async {
+      // The file has to be closed before its folder can be removed.
+      await AppDatabase.debugReset();
+      try {
+        await folder.delete(recursive: true);
+      } catch (_) {
+        // A failed cleanup must not fail a test.
+      }
+    });
+    final path = p.join(folder.path, 'tkd_app.db');
+
+    // A database as version 5 left it: students and attendance, and no
+    // created_at column yet. Only the columns the upgrade touches are needed.
+    final old = await databaseFactory.openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: 5,
+        onCreate: (db, _) async {
+          await db.execute('''
+CREATE TABLE students (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_no TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  deleted_at TEXT NOT NULL DEFAULT '',
+  uid        TEXT NOT NULL DEFAULT ''
+)
+''');
+          await db.execute('''
+CREATE TABLE attendance (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id    INTEGER NOT NULL,
+  attended_on   TEXT    NOT NULL,
+  checked_in_at TEXT    NOT NULL,
+  UNIQUE (student_id, attended_on)
+)
+''');
+        },
+      ),
+    );
+    final anaId = await old.insert('students', {
+      'student_no': 'TKD-0001',
+      'name': 'Ana Cruz',
+    });
+    await old.insert('students', {'student_no': 'TKD-0002', 'name': 'Ben Reyes'});
+    // Written out of order: the estimate is the earliest day, not the first row.
+    for (final day in ['2026-10-06', '2026-10-02']) {
+      await old.insert('attendance', {
+        'student_id': anaId,
+        'attended_on': day,
+        'checked_in_at': '${day}T09:30:00.000',
+      });
+    }
+    await old.close();
+
+    final before = DateTime.now();
+    await AppDatabase.debugReset();
+    AppDatabase.debugOverridePath = path;
+    final db = await AppDatabase.instance.database;
+
+    final columns = await db.rawQuery('PRAGMA table_info(students)');
+    expect([for (final c in columns) c['name']], contains('created_at'));
+
+    final rows = await db.query('students', orderBy: 'id');
+    // Ana was certainly enrolled by her first check-in.
+    expect(rows[0]['created_at'], '2026-10-02T00:00:00.000');
+    // Ben never checked in, so his absences are counted from the upgrade on.
+    final ben = DateTime.tryParse(rows[1]['created_at'] as String? ?? '');
+    expect(ben, isNotNull);
+    expect(ben!.isBefore(before.subtract(const Duration(seconds: 1))), isFalse);
+    expect(ben.isAfter(DateTime.now().add(const Duration(seconds: 1))), isFalse);
+
+    // Running the backfill again changes nothing: a date that is there stays.
+    await AppDatabase.backfillCreatedAt(db, now: DateTime(2030, 1, 1));
+    final again = await db.query('students', orderBy: 'id');
+    expect(again[0]['created_at'], rows[0]['created_at']);
+    expect(again[1]['created_at'], rows[1]['created_at']);
   });
 }

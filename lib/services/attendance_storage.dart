@@ -1,5 +1,6 @@
 import '../models/student.dart';
 import 'app_database.dart';
+import 'class_schedule.dart';
 import 'student_qr.dart';
 
 /// What happened when somebody was checked in.
@@ -47,24 +48,35 @@ class AttendanceReport {
     required this.day,
     required this.present,
     required this.absent,
+    required this.sessionHeld,
+    required this.scheduleSet,
   });
 
   /// The day the report is about.
   final DateTime day;
 
-  /// Everyone checked in on [day], the earliest check-in first.
+  /// Everyone checked in on [day], the earliest check-in first. A make-up
+  /// class on a day the schedule does not name still appears here.
   final List<AttendanceEntry> present;
 
   /// Every student in the registry (not in the Trash) with no check-in on
-  /// [day], in name order.
+  /// [day] who had already been enrolled by then, in name order. A student
+  /// enrolled after [day] is in neither list: they could not have attended.
+  /// Empty when [sessionHeld] is false: absences are not guessed.
   final List<Student> absent;
 
-  /// How many students the report covers.
+  /// How many students the report covers: everyone present, plus everyone
+  /// absent who was enrolled by [day].
   int get total => present.length + absent.length;
 
-  /// Whether anybody was checked in. A day with no check-in at all is read as
-  /// a day without class, so [absent] is not meaningful for it.
-  bool get sessionHeld => present.isNotEmpty;
+  /// Whether [day] is a class day on the owner's schedule. Independent of who
+  /// was scanned: a scheduled day with nobody checked in is still a class, and
+  /// a day off the schedule is not, even if a make-up was scanned.
+  final bool sessionHeld;
+
+  /// Whether the owner has saved class weekdays. Until they have, [sessionHeld]
+  /// is false and there is no absent list: the app does not guess from scans.
+  final bool scheduleSet;
 }
 
 /// One saved check-in, as listed on a student's own page.
@@ -99,6 +111,35 @@ class AttendanceHistory {
   DateTime? get lastScanned => records.isEmpty ? null : records.first.checkedInAt;
 }
 
+/// One student's month on the calendar: the days they were present and the
+/// days they were absent.
+class StudentMonthAttendance {
+  const StudentMonthAttendance({
+    required this.month,
+    required this.presentByDay,
+    required this.absentDays,
+    required this.scheduleSet,
+  });
+
+  /// The first day of the month the data is about.
+  final DateTime month;
+
+  /// Check-ins in this month, keyed by day of the month (1 to 31). The record
+  /// holds the time and the id an undo needs.
+  final Map<int, AttendanceRecord> presentByDay;
+
+  /// Days of the month (1 to 31) the student was checked in.
+  Set<int> get presentDays => presentByDay.keys.toSet();
+
+  /// Days of the month the student missed: a scheduled class day with no
+  /// check-in, from the day they were enrolled and before today.
+  final Set<int> absentDays;
+
+  /// Whether the owner has saved class weekdays. Until they have, [absentDays]
+  /// is empty: absences are not guessed from who happened to be scanned.
+  final bool scheduleSet;
+}
+
 /// Reads and writes the `attendance` table: one row per student per day.
 ///
 /// A row points at `students.id`, like the promotion and achievement records,
@@ -111,6 +152,9 @@ class AttendanceStorage {
   /// Bumped by every check-in, so a page that shows attendance can tell whether
   /// anything changed since it last read.
   static int revision = 0;
+
+  /// The `yyyy-mm-dd` shape of a stored day.
+  static final RegExp _dayShape = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 
   /// The student columns a check-in needs: enough to find, name and draw them.
   static const List<String> _studentColumns = [
@@ -276,13 +320,121 @@ class AttendanceStorage {
     return true;
   }
 
+  /// One student's attendance for the month of [month], for the calendar.
+  ///
+  /// Present is a saved check-in, including a make-up on a day off the
+  /// schedule. Absent is a scheduled class day with no check-in. Two limits
+  /// keep "absent" honest:
+  ///  * only days from the student's enrolment day on count (the day in
+  ///    `students.created_at`, the day itself included). A student whose
+  ///    enrolment date is missing falls back to their first check-in;
+  ///  * only days before today count, because today's class may still be on.
+  ///
+  /// Until the owner has set class weekdays, there are no absences: they are
+  /// not guessed from who happened to be scanned.
+  Future<StudentMonthAttendance> loadMonth(
+    int studentId,
+    DateTime month,
+  ) async {
+    final from = dayKey(DateTime(month.year, month.month));
+    final to = dayKey(DateTime(month.year, month.month + 1));
+    final db = await AppDatabase.instance.database;
+
+    final mine = await db.query(
+      _table,
+      columns: ['id', 'attended_on', 'checked_in_at'],
+      where: 'student_id = ? AND attended_on >= ? AND attended_on < ?',
+      whereArgs: [studentId, from, to],
+    );
+
+    // The first day this student can be absent: the day they were enrolled.
+    String? firstDay;
+    final enrolledRows = await db.query(
+      'students',
+      columns: ['created_at'],
+      where: 'id = ?',
+      whereArgs: [studentId],
+      limit: 1,
+    );
+    if (enrolledRows.isNotEmpty) {
+      final created = enrolledRows.first['created_at'] as String? ?? '';
+      final day = created.length >= 10 ? created.substring(0, 10) : '';
+      if (_dayShape.hasMatch(day)) firstDay = day;
+    }
+    if (firstDay == null) {
+      final firstRows = await db.rawQuery(
+        'SELECT MIN(attended_on) AS first_day FROM $_table '
+        'WHERE student_id = ?',
+        [studentId],
+      );
+      firstDay = firstRows.isEmpty
+          ? null
+          : firstRows.first['first_day'] as String?;
+    }
+    final today = dayKey(DateTime.now());
+    final schedule = await ClassSchedule.readFrom(db);
+
+    final presentByDay = <int, AttendanceRecord>{};
+    for (final row in mine) {
+      final key = row['attended_on'] as String? ?? '';
+      final day = _dayOfMonth(key);
+      if (day == null) continue;
+      presentByDay[day] = AttendanceRecord(
+        id: row['id'] as int,
+        day: key,
+        checkedInAt:
+            DateTime.tryParse(row['checked_in_at'] as String? ?? '') ??
+            DateTime.tryParse(key) ??
+            DateTime.fromMillisecondsSinceEpoch(0),
+      );
+    }
+
+    final absent = <int>{};
+    if (schedule != null && firstDay != null) {
+      for (final date in ClassSchedule.classDaysOfMonth(schedule, month)) {
+        final key = dayKey(date);
+        if (presentByDay.containsKey(date.day)) continue;
+        if (key.compareTo(firstDay) >= 0 && key.compareTo(today) < 0) {
+          absent.add(date.day);
+        }
+      }
+    }
+
+    return StudentMonthAttendance(
+      month: DateTime(month.year, month.month),
+      presentByDay: presentByDay,
+      absentDays: absent,
+      scheduleSet: schedule != null,
+    );
+  }
+
+  /// The day of the month in a stored `yyyy-mm-dd` value, or null when the
+  /// value is not in that form.
+  static int? _dayOfMonth(Object? stored) {
+    final text = stored is String ? stored : '';
+    if (text.length != 10) return null;
+    return int.tryParse(text.substring(8, 10));
+  }
+
   /// Who was present and who was absent on the day of [day].
   ///
   /// One query: every student who is not in the Trash, joined to their check-in
-  /// for that day when there is one. A student with a check-in is present, a
-  /// student without one is absent.
+  /// for that day when there is one. A student with a check-in is present. A
+  /// student without one is absent only if [day] is a scheduled class day and
+  /// they had been enrolled by then (their `created_at` day is on or before
+  /// it); a student who joined later is left out of the report instead of being
+  /// counted absent from a class they could not have attended. A student with
+  /// no enrolment date is treated as enrolled, which is how the report behaved
+  /// before the date existed.
+  ///
+  /// Whether a class was held comes from the owner's weekday schedule, not from
+  /// who was scanned. Until that schedule is saved, there is no absent list.
   Future<AttendanceReport> loadReport(DateTime day) async {
     final db = await AppDatabase.instance.database;
+    final key = dayKey(day);
+    final schedule = await ClassSchedule.readFrom(db);
+    final scheduleSet = schedule != null;
+    final sessionHeld = ClassSchedule.isClassDay(schedule, day);
     final rows = await db.rawQuery(
       '''
 SELECT s.id, s.uid, s.student_no, s.name, s.nickname, s.photo_base64,
@@ -291,9 +443,12 @@ FROM students s
 LEFT JOIN attendance a
   ON a.student_id = s.id AND a.attended_on = ?
 WHERE s.deleted_at = ''
+  AND (a.checked_in_at IS NOT NULL
+       OR s.created_at = ''
+       OR substr(s.created_at, 1, 10) <= ?)
 ORDER BY s.name COLLATE NOCASE, s.id
 ''',
-      [dayKey(day)],
+      [key, key],
     );
 
     final present = <AttendanceEntry>[];
@@ -302,7 +457,7 @@ ORDER BY s.name COLLATE NOCASE, s.id
       final student = Student.fromMap(row);
       final checkedIn = row['checked_in_at'] as String?;
       if (checkedIn == null) {
-        absent.add(student);
+        if (sessionHeld) absent.add(student);
       } else {
         present.add(
           AttendanceEntry(
@@ -313,7 +468,13 @@ ORDER BY s.name COLLATE NOCASE, s.id
       }
     }
     present.sort((a, b) => a.checkedInAt.compareTo(b.checkedInAt));
-    return AttendanceReport(day: day, present: present, absent: absent);
+    return AttendanceReport(
+      day: day,
+      present: present,
+      absent: absent,
+      sessionHeld: sessionHeld,
+      scheduleSet: scheduleSet,
+    );
   }
 
   /// Everyone checked in on the day of [day], the latest first. Students who

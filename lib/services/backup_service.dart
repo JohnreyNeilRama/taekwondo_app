@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 import 'app_database.dart';
 import 'achievement_storage.dart';
 import 'attendance_storage.dart';
+import 'class_schedule.dart';
 import 'promotion_storage.dart';
 import 'student_storage.dart';
 import 'student_uid.dart';
@@ -200,7 +201,9 @@ class BackupService {
   /// The backup file, ready to be saved.
   Future<Uint8List> exportBytes() async {
     final db = await AppDatabase.instance.database;
+    Set<int>? classDays;
     final tables = await db.transaction((txn) async {
+      classDays = await ClassSchedule.readFrom(txn);
       return <String, Object?>{
         'students': await txn.query('students', orderBy: 'id'),
         'promotions': await txn.query('promotions', orderBy: 'id'),
@@ -213,6 +216,7 @@ class BackupService {
       'version': formatVersion,
       'exportedAt': DateTime.now().toUtc().toIso8601String(),
       ...tables,
+      if (classDays != null) 'classDays': [...classDays!]..sort(),
     };
     var size = 0;
     for (final table in tables.values) {
@@ -437,6 +441,20 @@ class BackupService {
           'checked_in_at': at.isEmpty ? '${day}T00:00:00.000' : at,
         });
         addedAttendance++;
+      }
+
+      // A student who came from a backup made before enrolment dates existed
+      // has none yet. Give each the best date the data holds (the day of their
+      // first check-in, the one just imported included, otherwise today); a
+      // student the file did carry a date for, or one already here, is left
+      // alone.
+      await AppDatabase.backfillCreatedAt(txn);
+
+      // A backup that carries class days fills them in only when this device
+      // has never set them: an import never overwrites the owner's schedule.
+      final importedDays = ClassSchedule.fromList(decoded['classDays']);
+      if (importedDays != null && await ClassSchedule.readFrom(txn) == null) {
+        await ClassSchedule.writeTo(txn, importedDays);
       }
 
       return ImportResult(
