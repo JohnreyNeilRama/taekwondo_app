@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/student.dart';
 import '../services/student_storage.dart';
-import '../theme/app_theme.dart';
-import '../widgets/brand_header.dart';
-import '../widgets/empty_state_card.dart';
-import '../widgets/search_field.dart';
-import '../widgets/student_avatar.dart';
+import '../theme/app_dark.dart';
+import '../widgets/registry_header.dart';
+import '../widgets/student_list_card.dart';
+import '../widgets/student_search_bar.dart';
 import 'add_student_screen.dart';
 import 'student_detail_screen.dart';
 import 'student_qr_screen.dart';
@@ -88,6 +87,19 @@ String displayStudentName(String fullName) {
   return '${parts.family}, ${parts.given}';
 }
 
+/// How the student list is ordered. Family name A-Z is the default and what the
+/// registry has always shown.
+enum StudentSort {
+  nameAsc('Name A\u2013Z'),
+  nameDesc('Name Z\u2013A'),
+  newest('Recently added'),
+  oldest('Oldest first');
+
+  const StudentSort(this.label);
+
+  final String label;
+}
+
 class StudentsScreen extends StatefulWidget {
   const StudentsScreen({super.key, this.visits = 0});
 
@@ -109,10 +121,18 @@ class StudentsScreen extends StatefulWidget {
 
 class _StudentsScreenState extends State<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scroll = ScrollController();
   final StudentStorage _storage = StudentStorage();
   final List<Student> _students = [];
   bool _loading = true;
   String _query = '';
+  StudentSort _sort = StudentSort.nameAsc;
+
+  /// True once the page has been scrolled far enough that the Add Student
+  /// button in the section header is out of sight: the pinned search row then
+  /// grows a compact "+" so adding a student is always one tap away.
+  bool _compactAdd = false;
+  static const double _compactAddAfter = 90;
 
   /// The [StudentStorage.revision] this list was last read at. Null until the
   /// first read succeeds. A tab visit only re-reads the registry when the
@@ -129,6 +149,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     _loadStudents();
   }
 
@@ -145,8 +166,15 @@ class _StudentsScreenState extends State<StudentsScreen> {
 
   @override
   void dispose() {
+    _scroll.removeListener(_onScroll);
+    _scroll.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    final past = _scroll.hasClients && _scroll.offset > _compactAddAfter;
+    if (past != _compactAdd) setState(() => _compactAdd = past);
   }
 
   /// Reads the registry from the database so records survive app restarts.
@@ -202,16 +230,24 @@ class _StudentsScreenState extends State<StudentsScreen> {
     );
   }
 
-  /// The students on screen: the search box's filter, ordered by family name
-  /// (A-Z) and then given name. Building and sorting a fresh list on every read
-  /// is what makes the order update by itself after an add or an edit; the
-  /// stored [_students], and every TKD number, is left exactly as it is.
+  /// The students on screen: the search box's filter, in the chosen order
+  /// (family name A-Z unless the sort button says otherwise). Building and
+  /// sorting a fresh list on every read is what makes the order update by
+  /// itself after an add or an edit; the stored [_students], and every TKD
+  /// number, is left exactly as it is.
   List<Student> get _results {
     final q = _query.trim().toLowerCase();
     final list = q.isEmpty
         ? List<Student>.of(_students)
         : _students.where((s) => _matches(s, q)).toList();
-    list.sort(_byFamilyName);
+    list.sort(switch (_sort) {
+      StudentSort.nameAsc => _byFamilyName,
+      StudentSort.nameDesc => (Student a, Student b) => _byFamilyName(b, a),
+      StudentSort.newest => (Student a, Student b) =>
+          (b.id ?? 0).compareTo(a.id ?? 0),
+      StudentSort.oldest => (Student a, Student b) =>
+          (a.id ?? 0).compareTo(b.id ?? 0),
+    });
     return list;
   }
 
@@ -302,6 +338,14 @@ class _StudentsScreenState extends State<StudentsScreen> {
     await _applyEdit(updated);
   }
 
+  /// Opens a student's QR code, the one scanned to record attendance.
+  void _showQr(Student student) {
+    _dismissUndoBar();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => StudentQrScreen(student: student)),
+    );
+  }
+
   /// Writes an edited record back through the database and shows it on the
   /// card. Students are matched by id rather than by object identity, so the
   /// right row is updated even after a rename.
@@ -326,18 +370,33 @@ class _StudentsScreenState extends State<StudentsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Delete student?'),
+        backgroundColor: AppDark.surface,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(color: AppDark.border),
+        ),
+        title: const Text(
+          'Delete student?',
+          style: TextStyle(
+            color: AppDark.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         content: Text(
           '${student.name} will be moved to Trash. '
           'You can restore them from there.',
+          style: const TextStyle(color: AppDark.textSecondary, height: 1.4),
         ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppDark.icon),
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            style: TextButton.styleFrom(foregroundColor: AppDark.crimson),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Delete'),
           ),
@@ -357,6 +416,14 @@ class _StudentsScreenState extends State<StudentsScreen> {
   Future<void> _performDelete(Student student) async {
     if (!await _moveToTrash(student) || !mounted) return;
     _removeAndOfferUndo(student);
+  }
+
+  /// The "Move to Trash" choice of a card's menu: confirms first, like every
+  /// other way of deleting.
+  Future<void> _deleteFromMenu(Student student) async {
+    _dismissUndoBar();
+    if (!await _confirmDelete(student) || !mounted) return;
+    await _performDelete(student);
   }
 
   /// Moves [student] to the Trash in the database. Returns false, after telling
@@ -472,30 +539,111 @@ class _StudentsScreenState extends State<StudentsScreen> {
     setState(() => _query = '');
   }
 
-  /// Search box and the Add Student action on a single row, styled and laid
-  /// out the same way as the Achievement page's search + add row.
-  Widget _searchAndAddRow(bool hasQuery) {
-    return Row(
-      children: [
-        Expanded(
-          child: AppSearchField(
-            controller: _searchController,
-            hintText: 'Search name, nickname, school, contact',
-            onChanged: (value) => setState(() => _query = value),
-            hasQuery: hasQuery,
-            onClear: _clearSearch,
-          ),
+  /// Lets the owner choose how the list is ordered.
+  Future<void> _openSort() async {
+    _dismissUndoBar();
+    final picked = await showModalBottomSheet<StudentSort>(
+      context: context,
+      backgroundColor: AppDark.surface,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+              child: Text(
+                'Sort students',
+                style: TextStyle(
+                  color: AppDark.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            for (final option in StudentSort.values)
+              ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+                title: Text(
+                  option.label,
+                  style: TextStyle(
+                    color: option == _sort
+                        ? AppDark.crimson
+                        : AppDark.textPrimary,
+                    fontWeight: option == _sort
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                  ),
+                ),
+                trailing: option == _sort
+                    ? const Icon(Icons.check_rounded, color: AppDark.crimson)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(option),
+              ),
+            const SizedBox(height: 8),
+          ],
         ),
-        const SizedBox(width: 10),
-        FilledButton(
-          onPressed: _addStudent,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 44),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-          ),
-          child: const Text('+ Add Student'),
-        ),
-      ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _sort = picked);
+  }
+
+  /// "All Students" and the record count, with the Add Student button beside
+  /// them when the width allows and underneath, full width, when it does not.
+  Widget _sectionHeader(String countLabel) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final sideBySide = constraints.maxWidth >= 360;
+        final title = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'All Students',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                color: AppDark.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              countLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppDark.textSecondary,
+              ),
+            ),
+          ],
+        );
+        if (sideBySide) {
+          return Row(
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: 12),
+              _AddStudentButton(onPressed: _addStudent),
+            ],
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            title,
+            const SizedBox(height: 14),
+            _AddStudentButton(onPressed: _addStudent, expand: true),
+          ],
+        );
+      },
     );
   }
 
@@ -504,9 +652,12 @@ class _StudentsScreenState extends State<StudentsScreen> {
     final results = _results;
     final hasQuery = _query.trim().isNotEmpty;
     final count = results.length;
-    final countLabel = hasQuery
+    var countLabel = hasQuery
         ? '$count result${count == 1 ? '' : 's'} for "${_query.trim()}"'
         : '$count record${count == 1 ? '' : 's'}';
+    if (_sort != StudentSort.nameAsc) {
+      countLabel = '$countLabel \u00B7 ${_sort.label}';
+    }
 
     return Listener(
       // Any tap on the screen (outside the Undo message itself) closes the
@@ -514,291 +665,366 @@ class _StudentsScreenState extends State<StudentsScreen> {
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) => _dismissUndoBar(),
       child: Column(
-      children: [
-        BrandHeader(
-          // The Trash button sits in the upper-right corner of the page.
-          actions: [
-            IconButton(
-              tooltip: 'Trash',
-              onPressed: _openTrash,
-              icon: const Icon(Icons.delete_outline, color: Colors.white),
-            ),
-          ],
-        ),
-        Expanded(
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'All Students',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        countLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // The search box sits at the bottom of the header block,
-                      // beside the Add Student action, matching the
-                      // Achievement page layout.
-                      _searchAndAddRow(hasQuery),
-                      const SizedBox(height: 16),
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (results.isEmpty)
-                        EmptyStateCard(
-                          icon: Icons.groups_outlined,
-                          title: 'No student records found.',
-                          message: 'Try a different search, or add a new student to start the registry.',
-                          actionLabel: 'Add Student',
-                          onAction: _addStudent,
-                        ),
-                    ],
+        children: [
+          RegistryHeader(
+            // The Trash button sits in the upper-right corner of the page.
+            actions: [
+              HeaderIconButton(
+                icon: Icons.delete_outline,
+                tooltip: 'Trash',
+                onPressed: _openTrash,
+              ),
+            ],
+          ),
+          Expanded(
+            // The page is a sheet with rounded top corners laid over the
+            // header; the colour behind is what shows in the two cut corners.
+            child: ColoredBox(
+              color: AppDark.headerBottom,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
+                child: ColoredBox(
+                  color: AppDark.background,
+                  // On a tablet or a computer the list keeps a phone-like
+                  // reading width instead of stretching edge to edge.
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 720),
+                      child: _buildScroll(results, hasQuery, countLabel),
+                    ),
                   ),
                 ),
               ),
-              if (!_loading && results.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final student = results[index];
-                      return Dismissible(
-                        key: ValueKey(student.id),
-                        direction: DismissDirection.endToStart,
-                        confirmDismiss: (_) => _confirmSwipeDelete(student),
-                        onDismissed: (_) => _finishSwipeDelete(student),
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          margin: const EdgeInsets.only(bottom: 12),
-                          decoration: BoxDecoration(
-                            color: AppColors.red,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.white,
-                          ),
-                        ),
-                        child: _StudentCard(
-                          student: student,
-                          onView: () => _openStudent(student),
-                          onEdit: () => _editStudent(student),
-                        ),
-                      );
-                    }, childCount: results.length),
-                  ),
-                ),
-            ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScroll(
+    List<Student> results,
+    bool hasQuery,
+    String countLabel,
+  ) {
+    return CustomScrollView(
+      controller: _scroll,
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+            child: _sectionHeader(countLabel),
           ),
         ),
+        // The search card stays at the top while the list scrolls under it, so
+        // a student can be looked up from anywhere in a long registry.
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: _PinnedSearchDelegate(
+            search: StudentSearchBar(
+              controller: _searchController,
+              onChanged: (value) => setState(() => _query = value),
+              hasQuery: hasQuery,
+              onClear: _clearSearch,
+              onSort: _openSort,
+              sortActive: _sort != StudentSort.nameAsc,
+            ),
+            showAdd: _compactAdd,
+            onAdd: _addStudent,
+          ),
+        ),
+        if (_loading)
+          const SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(
+                child: CircularProgressIndicator(color: AppDark.crimson),
+              ),
+            ),
+          )
+        else if (results.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: _EmptyState(
+                searching: hasQuery,
+                onAdd: _addStudent,
+                onClearSearch: _clearSearch,
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final student = results[index];
+                return Dismissible(
+                  key: ValueKey(student.id),
+                  direction: DismissDirection.endToStart,
+                  confirmDismiss: (_) => _confirmSwipeDelete(student),
+                  onDismissed: (_) => _finishSwipeDelete(student),
+                  background: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Container(
+                      alignment: Alignment.centerRight,
+                      padding: const EdgeInsets.only(right: 24),
+                      decoration: BoxDecoration(
+                        gradient: AppDark.crimsonGradient,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: StudentListCard(
+                      student: student,
+                      title: displayStudentName(student.name),
+                      onView: () => _openStudent(student),
+                      onEdit: () => _editStudent(student),
+                      onShowQr: () => _showQr(student),
+                      onTrash: () => _deleteFromMenu(student),
+                    ),
+                  ),
+                );
+              }, childCount: results.length),
+            ),
+          ),
       ],
-      ),
     );
   }
 }
 
-/// Card for one student: the saved 1 x 1 picture (the initials until one is
-/// uploaded) that opens larger when it is tapped, the name with the family name
-/// first, the nickname and the school, and an Edit button in the top-right
-/// corner. The whole card opens the student's details; the picture and the Edit
-/// button take their own taps.
-class _StudentCard extends StatelessWidget {
-  const _StudentCard({
-    required this.student,
-    required this.onView,
-    required this.onEdit,
+/// Keeps the search card (and the compact "+") pinned under the section header.
+class _PinnedSearchDelegate extends SliverPersistentHeaderDelegate {
+  _PinnedSearchDelegate({
+    required this.search,
+    required this.showAdd,
+    required this.onAdd,
   });
 
-  final Student student;
-  final VoidCallback onView;
-  final VoidCallback onEdit;
+  final Widget search;
+  final bool showAdd;
+  final VoidCallback onAdd;
+
+  /// 52 for the card plus 10 above and below it.
+  static const double extent = 72;
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onView,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
+  double get minExtent => extent;
+
+  @override
+  double get maxExtent => extent;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: BoxDecoration(
+        color: AppDark.background,
+        // A hairline appears once cards are sliding underneath.
+        border: Border(
+          bottom: BorderSide(
+            color: overlapsContent ? AppDark.border : Colors.transparent,
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // The picture opens larger on its own; this inner gesture
-                // claims the tap, so it never also opens the details.
-                GestureDetector(
-                  onTap: () => _showPhoto(context),
-                  child: StudentAvatar(
-                    student: student,
-                    size: 56,
-                    borderRadius: 14,
-                    initialsFontSize: 18,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayStudentName(student.name),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.black,
-                        ),
-                      ),
-                      if (student.nickname.isNotEmpty) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          '"${student.nickname}"',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppColors.muted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                // Edit sits in the upper-right corner. Being a button, it takes
-                // its own tap, so the card underneath is not opened as well.
-                IconButton(
-                  tooltip: 'Edit student',
-                  onPressed: onEdit,
-                  icon: const Icon(Icons.edit_outlined, color: AppColors.black),
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-            if (student.schoolName.isNotEmpty) ...[
-              const SizedBox(height: 14),
-              _infoRow('School', student.schoolName),
-            ],
-          ],
-        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: search),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            child: showAdd
+                ? Padding(
+                    padding: const EdgeInsets.only(left: 10),
+                    child: _CompactAddButton(onPressed: onAdd),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
       ),
     );
   }
 
-  /// Shows the student's saved picture larger, centred in a dialog.
-  ///
-  /// The picture is the one on the student's own row ([Student.photoBytes]); a
-  /// student who has none opens their initials at the same size, so the tap
-  /// always does something. Tap outside, or the Close button, to dismiss it.
-  void _showPhoto(BuildContext context) {
-    final bytes = student.photoBytes;
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: AppColors.surface,
-        insetPadding: const EdgeInsets.all(24),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: IconButton(
-                tooltip: 'Close',
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                icon: const Icon(Icons.close, color: AppColors.black),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: SizedBox(
-                      width: 240,
-                      height: 240,
-                      child: bytes == null
-                          ? StudentAvatar(
-                              student: student,
-                              size: 240,
-                              borderRadius: 16,
-                              initialsFontSize: 72,
-                            )
-                          : Image.memory(bytes, fit: BoxFit.cover),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
+  @override
+  bool shouldRebuild(covariant _PinnedSearchDelegate oldDelegate) => true;
+}
+
+/// The main action: crimson, with a white plus, rounded corners, a soft red
+/// glow and a ripple. [expand] makes it fill the width, for narrow phones.
+class _AddStudentButton extends StatelessWidget {
+  const _AddStudentButton({required this.onPressed, this.expand = false});
+
+  final VoidCallback onPressed;
+  final bool expand;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: AppDark.crimsonGradient,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: AppDark.crimsonGlow,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(14),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Row(
+                mainAxisSize: expand ? MainAxisSize.max : MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.add, color: Colors.white, size: 22),
+                  SizedBox(width: 8),
                   Text(
-                    displayStudentName(student.name),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
+                    'Add Student',
+                    maxLines: 1,
+                    style: TextStyle(
+                      color: Colors.white,
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.black,
                     ),
                   ),
                 ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
 
-  /// A gray label (`School`) with its value next to it.
-  /// Hidden entirely when [value] is empty so cards stay compact.
-  Widget _infoRow(String label, String value) {
-    if (value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+/// The icon-only "+" that joins the pinned search row once the section header's
+/// Add Student button has scrolled out of sight.
+class _CompactAddButton extends StatelessWidget {
+  const _CompactAddButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Add student',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: AppDark.crimsonGradient,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: AppDark.crimsonGlow,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(16),
+            child: const SizedBox(
+              width: 52,
+              height: StudentSearchBar.height,
+              child: Icon(Icons.add, color: Colors.white, size: 26),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// What the list shows when there is nothing to list: either the registry is
+/// empty (with a way to add the first student) or the search matched nobody
+/// (with a way to clear it).
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.searching,
+    required this.onAdd,
+    required this.onClearSearch,
+  });
+
+  final bool searching;
+  final VoidCallback onAdd;
+  final VoidCallback onClearSearch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+      decoration: BoxDecoration(
+        color: AppDark.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDark.border),
+      ),
+      child: Column(
         children: [
-          SizedBox(
-            width: 56,
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              color: AppDark.surfaceHigh,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppDark.border),
+            ),
+            child: Icon(
+              searching ? Icons.search_off_rounded : Icons.groups_outlined,
+              size: 38,
+              color: AppDark.rose,
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, color: AppColors.black),
+          const SizedBox(height: 20),
+          const Text(
+            'No student records found.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              color: AppDark.textPrimary,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            searching
+                ? 'No student matches that search. Try a name, nickname, '
+                      'school or contact number.'
+                : 'Add a student to start the registry.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 14,
+              height: 1.4,
+              color: AppDark.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 22),
+          if (searching)
+            OutlinedButton(
+              onPressed: onClearSearch,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppDark.textPrimary,
+                side: const BorderSide(color: AppDark.border),
+                minimumSize: const Size(0, 48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('Clear search'),
+            )
+          else
+            _AddStudentButton(onPressed: onAdd, expand: true),
         ],
       ),
     );

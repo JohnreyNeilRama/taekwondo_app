@@ -50,7 +50,7 @@ Future<void> _addStudentWithBelt(
   String name,
   String belt,
 ) async {
-  await tester.tap(find.text('+ Add Student').first);
+  await tester.tap(find.text('Add Student').first);
   await _settle(tester);
   await tester.enterText(
     find.widgetWithText(TextField, 'Enter full name'),

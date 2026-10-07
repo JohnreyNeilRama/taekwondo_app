@@ -6,16 +6,19 @@ import 'package:flutter/material.dart';
 
 import '../services/app_database.dart';
 import '../services/backup_service.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_input.dart';
+import '../widgets/app_page.dart';
 import '../widgets/brand_header.dart';
 import '../widgets/empty_state_card.dart';
 
 /// Backup / transfer hub: export the registry to a file and import one back.
 ///
 /// The counts at the top are read from the database, and the file is the whole
-/// registry (students, pictures, promotion records, achievements and attendance) in one
-/// JSON document. Importing only ever adds records; it never changes or deletes
-/// what is already on the device.
+/// registry (students, pictures, promotion records, achievements and
+/// attendance) in one JSON document. Importing only ever adds records; it never
+/// changes or deletes what is already on the device.
 class DataTransferScreen extends StatefulWidget {
   const DataTransferScreen({super.key, this.visits = 0});
 
@@ -133,6 +136,7 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
           ),
           actions: [
             TextButton(
+              style: TextButton.styleFrom(foregroundColor: AppDark.icon),
               onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel'),
             ),
@@ -267,63 +271,61 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
       children: [
         const BrandHeader(),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              const Text(
-                'Import / Export Data',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 2),
-              const Text(
-                'Back up your registry or move it to a new device',
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
-              ),
-              const SizedBox(height: 16),
-              _BackupStatusCard(due: _backupDue, lastExport: _lastExport),
-              const SizedBox(height: 16),
-              _StorageSummary(counts: _counts),
-              const SizedBox(height: 16),
-              _ActionCard(
-                icon: Icons.file_download_outlined,
-                title: 'Export data',
-                message:
-                    'Save a copy of all student records to a file you can '
-                    'keep or move to another device.',
-                buttonLabel: 'Export backup',
-                onPressed: _busy ? null : _export,
-              ),
-              _ActionCard(
-                icon: Icons.file_upload_outlined,
-                title: 'Import data',
-                message:
-                    'Load records from a backup file. Imported records are '
-                    'merged with the ones already on this device.',
-                buttonLabel: 'Import backup',
-                tone: AppColors.red,
-                onPressed: _busy ? null : _import,
-              ),
-              _ActionCard(
-                icon: Icons.health_and_safety_outlined,
-                title: 'Check database',
-                message:
-                    'Checks that the saved file on this device is intact. '
-                    'Worth running now and then, or if the app ever behaves '
-                    'strangely.',
-                buttonLabel: 'Check now',
-                buttonIcon: Icons.fact_check_outlined,
-                onPressed: _busy ? null : _checkDatabase,
-              ),
-              const _TransferredList(),
-              const NoticeCard(
-                icon: Icons.warning_amber_outlined,
-                message:
-                    'Importing only adds records: nothing already on this '
-                    'device is changed or deleted. Export often and keep the '
-                    'file somewhere safe, such as your cloud storage or an '
-                    'email to yourself.',
-              ),
-            ],
+          child: AppSheet(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+              children: [
+                const PageIntro(
+                  title: 'Import / Export Data',
+                  subtitle: 'Back up your registry or move it to a new device',
+                ),
+                const SizedBox(height: 20),
+                _BackupStatusCard(due: _backupDue, lastExport: _lastExport),
+                const SizedBox(height: 16),
+                _StorageSummary(counts: _counts),
+                const SizedBox(height: 16),
+                _ActionCard(
+                  icon: Icons.file_download_outlined,
+                  title: 'Export data',
+                  message:
+                      'Save a copy of all student records to a file you can '
+                      'keep or move to another device.',
+                  buttonLabel: 'Export backup',
+                  primary: true,
+                  onPressed: _busy ? null : _export,
+                ),
+                _ActionCard(
+                  icon: Icons.file_upload_outlined,
+                  title: 'Import data',
+                  message:
+                      'Load records from a backup file. Imported records are '
+                      'merged with the ones already on this device.',
+                  buttonLabel: 'Import backup',
+                  onPressed: _busy ? null : _import,
+                ),
+                _ActionCard(
+                  icon: Icons.health_and_safety_outlined,
+                  title: 'Check database',
+                  message:
+                      'Checks that the saved file on this device is intact. '
+                      'Worth running now and then, or if the app ever behaves '
+                      'strangely.',
+                  buttonLabel: 'Check now',
+                  buttonIcon: Icons.fact_check_outlined,
+                  onPressed: _busy ? null : _checkDatabase,
+                ),
+                const _TransferredList(),
+                const SizedBox(height: 16),
+                const NoticeCard(
+                  icon: Icons.warning_amber_outlined,
+                  message:
+                      'Importing only adds records: nothing already on this '
+                      'device is changed or deleted. Export often and keep the '
+                      'file somewhere safe, such as your cloud storage or an '
+                      'email to yourself.',
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -337,13 +339,41 @@ class _TransferredList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SectionCard(
-      icon: Icons.inventory_2_outlined,
-      title: 'What gets transferred',
-      subtitle: 'Included in every backup',
-      showDivider: false,
+    return const DarkCard(
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              IconPlate(icon: Icons.inventory_2_outlined),
+              SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'What gets transferred',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppDark.textPrimary,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Included in every backup',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppDark.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
           _TransferRow(
             icon: Icons.groups_outlined,
             label: 'Student records',
@@ -386,19 +416,28 @@ class _StorageStat extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w800,
-            color: AppColors.black,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.3,
+              color: AppDark.textPrimary,
+            ),
           ),
         ),
         const SizedBox(height: 2),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 11, color: AppColors.muted),
+        // Scales down rather than wrapping, so five labels share a narrow
+        // phone's width without growing taller.
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: const TextStyle(fontSize: 11, color: AppDark.textSecondary),
+          ),
         ),
       ],
     );
@@ -415,24 +454,14 @@ class _StorageSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     String show(int? value) => value == null ? '–' : '$value';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+    return DarkCard(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'On this device',
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: AppColors.black,
-            ),
+          const Padding(
+            padding: EdgeInsets.only(left: 4),
+            child: SectionLabel('ON THIS DEVICE'),
           ),
           const SizedBox(height: 14),
           Row(
@@ -490,19 +519,10 @@ class _TransferRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: AppColors.iconCircle,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 17, color: AppColors.black),
-          ),
+          IconPlate(icon: icon, size: 38),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -513,13 +533,16 @@ class _TransferRow extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.black,
+                    color: AppDark.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   detail,
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppDark.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -545,6 +568,9 @@ class _BackupStatusCard extends StatelessWidget {
   /// When the last backup was saved, or null when there has never been one.
   final DateTime? lastExport;
 
+  /// The green of "everything is backed up".
+  static const Color _ok = Color(0xFF4ADE80);
+
   /// "never", "today", "yesterday" or "N days ago".
   static String _ago(DateTime? when, DateTime now) {
     if (when == null) return 'never';
@@ -557,7 +583,7 @@ class _BackupStatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ago = _ago(lastExport, DateTime.now());
-    final tone = due ? AppColors.red : AppColors.black;
+    final tone = due ? AppInput.error : _ok;
     final icon = due ? Icons.warning_amber_outlined : Icons.verified_outlined;
     final title = due ? 'Back up your records' : 'Your backup is up to date';
     final message = due
@@ -573,24 +599,23 @@ class _BackupStatusCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: due ? AppColors.redTint : AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: due ? AppColors.red : AppColors.border),
+        color: due ? AppColors.redTint : AppDark.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: due ? AppDark.crimson : AppDark.border,
+          width: due ? 1.5 : 1,
+        ),
+        boxShadow: due ? AppDark.crimsonGlow : AppDark.cardShadow,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: due ? Colors.white : AppColors.iconCircle,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, size: 20, color: tone),
+          IconPlate(
+            icon: icon,
+            color: tone,
+            background: tone.withValues(alpha: 0.14),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -598,9 +623,9 @@ class _BackupStatusCard extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: due ? AppColors.red : AppColors.black,
+                    color: due ? AppInput.error : AppDark.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -609,7 +634,7 @@ class _BackupStatusCard extends StatelessWidget {
                   style: const TextStyle(
                     fontSize: 13,
                     height: 1.4,
-                    color: AppColors.muted,
+                    color: AppDark.textSecondary,
                   ),
                 ),
               ],
@@ -621,7 +646,7 @@ class _BackupStatusCard extends StatelessWidget {
   }
 }
 
-/// Large action card used for both the Export and Import choices.
+/// Large action card used for the Export, Import and Check choices.
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
     required this.icon,
@@ -629,7 +654,7 @@ class _ActionCard extends StatelessWidget {
     required this.message,
     required this.buttonLabel,
     required this.onPressed,
-    this.tone = AppColors.black,
+    this.primary = false,
     this.buttonIcon,
   });
 
@@ -642,79 +667,63 @@ class _ActionCard extends StatelessWidget {
   /// second tap from starting another one.
   final VoidCallback? onPressed;
 
-  /// Button / icon colour; the import action uses the brand red so the two
-  /// directions are instantly distinguishable.
-  final Color tone;
+  /// The one main action of the page (Export) gets the crimson button; the
+  /// others get an outlined one, so the page has a clear first choice.
+  final bool primary;
 
-  /// Icon on the button. When null, the export / import arrow that matches
-  /// [tone] is used.
+  /// Icon on the button. When null, the export / import arrow that matches the
+  /// card's own icon is used.
   final IconData? buttonIcon;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    final iconData = buttonIcon ?? icon;
+    return DarkCard(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: tone == AppColors.red
-                      ? AppColors.redTint
-                      : AppColors.iconCircle,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, size: 20, color: tone),
-              ),
-              const SizedBox(width: 12),
+              IconPlate(icon: icon),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   title,
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.black,
+                    color: AppDark.textPrimary,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Text(
             message,
             style: const TextStyle(
               fontSize: 13,
               height: 1.4,
-              color: AppColors.muted,
+              color: AppDark.textSecondary,
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: onPressed,
-              style: FilledButton.styleFrom(backgroundColor: tone),
-              icon: Icon(
-                buttonIcon ??
-                    (tone == AppColors.red
-                        ? Icons.file_upload_outlined
-                        : Icons.file_download_outlined),
-                size: 18,
-              ),
-              label: Text(buttonLabel),
-            ),
+            child: primary
+                ? CrimsonButton(
+                    label: buttonLabel,
+                    icon: iconData,
+                    expand: true,
+                    onPressed: onPressed,
+                  )
+                : OutlinedButton.icon(
+                    onPressed: onPressed,
+                    icon: Icon(iconData, size: 18),
+                    label: Text(buttonLabel),
+                  ),
           ),
         ],
       ),

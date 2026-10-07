@@ -3,7 +3,10 @@ import 'package:flutter/material.dart';
 import '../models/student.dart';
 import '../services/attendance_storage.dart';
 import '../services/class_schedule.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_page.dart';
+import '../widgets/registry_header.dart';
 import '../widgets/student_avatar.dart';
 import 'class_days_screen.dart';
 
@@ -112,11 +115,27 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+    final cancelled = _report?.trainingCancelled == true;
+    return AppPage(
+      title: 'Attendance report',
+      subtitle: 'Who was present and who was absent',
+      actions: [
+        HeaderIconButton(
+          icon: cancelled ? Icons.event_busy : Icons.event_busy_outlined,
+          color: cancelled ? AppColors.cancelled : null,
+          tooltip: cancelled
+              ? 'Remove training cancelled'
+              : 'Training cancelled',
+          onPressed: _report == null ? null : _toggleCancelled,
+        ),
+        HeaderIconButton(
+          icon: Icons.calendar_view_week,
+          tooltip: 'Class days',
+          onPressed: _openClassDays,
+        ),
+      ],
+      child: Column(
         children: [
-          _buildHeader(),
           _dayBar(),
           Expanded(child: _body()),
         ],
@@ -124,72 +143,15 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 16, 12),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-              const SizedBox(width: 4),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Attendance report',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      'Who was present and who was absent',
-                      style: TextStyle(color: Color(0xFFD1D5DB), fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: _report?.trainingCancelled == true
-                    ? 'Remove training cancelled'
-                    : 'Training cancelled',
-                icon: Icon(
-                  _report?.trainingCancelled == true
-                      ? Icons.event_busy
-                      : Icons.event_busy_outlined,
-                  color: _report?.trainingCancelled == true
-                      ? AppColors.cancelled
-                      : Colors.white,
-                ),
-                onPressed: _report == null ? null : _toggleCancelled,
-              ),
-              IconButton(
-                tooltip: 'Class days',
-                icon: const Icon(Icons.calendar_view_week, color: Colors.white),
-                onPressed: _openClassDays,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _dayBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(bottom: BorderSide(color: AppColors.border)),
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppDark.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppDark.border),
+        boxShadow: AppDark.cardShadow,
       ),
       child: Row(
         children: [
@@ -373,7 +335,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           box(
             'Present',
             cancelled ? '-' : '${report.present.length}',
-            const Color(0xFF15803D),
+            const Color(0xFF4ADE80),
           ),
           const SizedBox(width: 8),
           box(
@@ -408,7 +370,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return _StudentTile(
           student: entry.student,
           trailing: _formatTime(entry.checkedInAt),
-          trailingColor: const Color(0xFF15803D),
+          trailingColor: const Color(0xFF4ADE80),
         );
       },
     );
@@ -516,7 +478,7 @@ class _StudentTile extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
       child: Row(

@@ -10,6 +10,7 @@ import 'package:tkd_app/screens/student_qr_screen.dart';
 import 'package:tkd_app/screens/students_screen.dart';
 import 'package:tkd_app/services/app_database.dart';
 import 'package:tkd_app/services/student_uid.dart';
+import 'package:tkd_app/widgets/app_nav_bar.dart';
 
 /// Flushes the database work and the frames the screens need: real SQLite only
 /// answers on the real event loop, so real time is yielded with
@@ -79,7 +80,7 @@ void main() {
     await tester.pumpWidget(const TkdApp());
     await _settle(tester);
 
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -111,10 +112,8 @@ void main() {
     await tester.pumpWidget(const TkdApp());
     await _settle(tester);
 
-    final bar = tester.widget<BottomNavigationBar>(
-      find.byType(BottomNavigationBar),
-    );
-    expect([for (final item in bar.items) item.label], [
+    final bar = tester.widget<AppNavBar>(find.byType(AppNavBar));
+    expect(AppNavBar.labels, [
       'Students',
       'Promotion',
       'Scan',
@@ -122,7 +121,19 @@ void main() {
       'Data',
     ]);
     // Students is the page on screen, and it sits in the first slot.
-    expect(bar.currentIndex, 0);
+    expect(bar.selected, 0);
+    // The Scan slot is the middle one, and it is an action, never selected.
+    expect(AppNavBar.labels[AppNavBar.scanSlot], 'Scan');
+    for (final label in AppNavBar.labels) {
+      expect(
+        find.descendant(
+          of: find.byType(AppNavBar),
+          matching: find.text(label),
+        ),
+        findsOneWidget,
+        reason: '$label should be on the bottom bar',
+      );
+    }
     expect(find.byIcon(Icons.qr_code_scanner), findsOneWidget);
   });
 }

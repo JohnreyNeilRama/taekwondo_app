@@ -6,7 +6,9 @@ import '../models/student.dart';
 import '../services/student_card_export.dart';
 import '../services/student_qr.dart';
 import '../services/student_uid.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_page.dart';
+import '../widgets/empty_state_card.dart';
 import '../widgets/student_avatar.dart';
 import '../widgets/student_id_card.dart';
 
@@ -45,89 +47,34 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (justSaved) ...[_savedNote(), const SizedBox(height: 16)],
-                _codeCard(),
-                const SizedBox(height: 16),
-                _shareCard(),
-              ],
-            ),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _buildDoneBar(context),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 16, 12),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      justSaved ? 'Student saved' : 'Student QR code',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Text(
-                      'Used to record attendance',
-                      style: TextStyle(color: Color(0xFFD1D5DB), fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+    return AppPage(
+      title: justSaved ? 'Student saved' : 'Student QR code',
+      subtitle: 'Used to record attendance',
+      bottom: AppActionBar(
+        child: SizedBox(
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            child: const Text('Done'),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _savedNote() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.redTint,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
         children: [
-          Icon(Icons.check_circle_outline, color: AppColors.red, size: 20),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              'The student was added and their QR code is ready. Share or '
-              'print the ID card below so the student has it: scanning the '
-              'code records attendance.',
-              style: TextStyle(fontSize: 13, color: AppColors.black),
+          if (justSaved) ...[
+            const NoticeCard(
+              icon: Icons.check_circle_outline,
+              message:
+                  'The student was added and their QR code is ready. Share or '
+                  'print the ID card below so the student has it: scanning the '
+                  'code records attendance.',
             ),
-          ),
+            const SizedBox(height: 16),
+          ],
+          _codeCard(),
+          const SizedBox(height: 16),
+          _shareCard(),
         ],
       ),
     );
@@ -135,25 +82,22 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
 
   Widget _codeCard() {
     final hasCode = isStudentUid(student.uid);
-    return Container(
-      width: double.infinity,
+    return DarkCard(
+      accent: AppDark.crimson,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         children: [
           Row(
             children: [
               StudentAvatar(
                 student: student,
-                size: 48,
-                shape: BoxShape.circle,
-                initialsFontSize: 16,
+                size: 52,
+                borderRadius: 16,
+                initialsFontSize: 17,
+                backgroundColor: AppDark.surfaceHigh,
+                initialsColor: AppDark.rose,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,19 +107,15 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.black,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: AppDark.textPrimary,
                       ),
                     ),
-                    if (student.studentNo.isNotEmpty)
-                      Text(
-                        student.studentNo,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: AppColors.muted,
-                        ),
-                      ),
+                    if (student.studentNo.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      AppChip(label: student.studentNo, emphasized: true),
+                    ],
                   ],
                 ),
               ),
@@ -183,12 +123,14 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
           ),
           const SizedBox(height: 20),
           if (hasCode)
+            // A QR code is always dark on white, whatever the app theme: that
+            // is what a scanner reads best.
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: AppDark.crimsonGlow,
               ),
               child: QrImageView(
                 data: StudentQr.encode(student.uid),
@@ -204,7 +146,7 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
                 'This student has no QR identity yet. Close and reopen the '
                 'app, then try again.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: AppColors.muted),
+                style: TextStyle(fontSize: 13, color: AppDark.textSecondary),
               ),
             ),
           const SizedBox(height: 16),
@@ -212,7 +154,7 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
             'The code never changes, even if the name or the registry number '
             'does, so a printed copy stays valid.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: AppColors.muted),
+            style: TextStyle(fontSize: 12, color: AppDark.textSecondary),
           ),
         ],
       ),
@@ -223,21 +165,8 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
   /// picture, save it to the device, or print a sheet of cards.
   Widget _shareCard() {
     if (!isStudentUid(student.uid)) return const SizedBox.shrink();
-    final outlined = OutlinedButton.styleFrom(
-      minimumSize: const Size(0, 44),
-      foregroundColor: AppColors.black,
-      side: const BorderSide(color: AppColors.border),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-    );
-    return Container(
-      width: double.infinity,
+    return DarkCard(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -245,14 +174,14 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
             'ID card',
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.black,
+              fontWeight: FontWeight.w800,
+              color: AppDark.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
           const Text(
             'Give the student their card as a picture or a printed sheet.',
-            style: TextStyle(fontSize: 12, color: AppColors.muted),
+            style: TextStyle(fontSize: 12, color: AppDark.textSecondary),
           ),
           const SizedBox(height: 16),
           // The card keeps its fixed size and is scaled down to fit narrow
@@ -280,7 +209,6 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  style: outlined,
                   onPressed: _busy ? null : _saveImage,
                   icon: const Icon(Icons.download_outlined, size: 18),
                   label: const Text('Save image'),
@@ -289,7 +217,6 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton.icon(
-                  style: outlined,
                   onPressed: _busy ? null : _printSheet,
                   icon: const Icon(Icons.print_outlined, size: 18),
                   label: const Text('Print sheet'),
@@ -342,30 +269,6 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
-  }
-
-  Widget _buildDoneBar(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: () => Navigator.of(context).maybePop(),
-              child: const Text('Done'),
-            ),
-          ),
-        ),
-      ),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 }

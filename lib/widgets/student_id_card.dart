@@ -3,7 +3,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/student.dart';
 import '../services/student_qr.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
 import 'student_avatar.dart';
 
 /// The printable ID card a student receives: club header, photo, name, registry
@@ -13,6 +13,10 @@ import 'student_avatar.dart';
 /// ratio of a bank-card sized ID) so the picture that is shared or printed
 /// looks the same on every phone. Wrap it in a `RepaintBoundary` to turn it
 /// into an image.
+///
+/// The card is a physical object, not a page of the app, so it keeps its own
+/// light colours whatever the app theme is: dark ink on white paper is what
+/// prints well and what a QR scanner reads best.
 class StudentIdCard extends StatelessWidget {
   const StudentIdCard({super.key, required this.student});
 
@@ -21,6 +25,11 @@ class StudentIdCard extends StatelessWidget {
   static const double width = 340;
   static const double height = 214;
 
+  static const Color _paper = Colors.white;
+  static const Color _ink = Color(0xFF0F1626);
+  static const Color _quiet = Color(0xFF5B6478);
+  static const Color _plate = Color(0xFFEEF0F4);
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -28,9 +37,9 @@ class StudentIdCard extends StatelessWidget {
       height: height,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: _paper,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.black, width: 1.2),
+        border: Border.all(color: _ink, width: 1.2),
       ),
       child: Column(
         children: [
@@ -48,6 +57,14 @@ class StudentIdCard extends StatelessWidget {
                     size: 112,
                     padding: EdgeInsets.zero,
                     backgroundColor: Colors.white,
+                    eyeStyle: const QrEyeStyle(
+                      eyeShape: QrEyeShape.square,
+                      color: Colors.black,
+                    ),
+                    dataModuleStyle: const QrDataModuleStyle(
+                      dataModuleShape: QrDataModuleShape.square,
+                      color: Colors.black,
+                    ),
                   ),
                 ],
               ),
@@ -61,7 +78,13 @@ class StudentIdCard extends StatelessWidget {
   Widget _header() {
     return Container(
       height: 44,
-      color: AppColors.black,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [AppDark.headerTop, AppDark.headerBottom],
+        ),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Row(
         children: [
@@ -70,7 +93,7 @@ class StudentIdCard extends StatelessWidget {
             height: 30,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.red,
+              gradient: AppDark.crimsonGradient,
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Text(
@@ -83,19 +106,23 @@ class StudentIdCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          const Text(
-            'TKD Records',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+          const Expanded(
+            child: Text(
+              'TKD Records',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           const Text(
             'STUDENT ID',
             style: TextStyle(
-              color: Color(0xFFD1D5DB),
+              color: Color(0xFFCBD5E1),
               fontSize: 11,
               letterSpacing: 1.5,
               fontWeight: FontWeight.w600,
@@ -111,7 +138,13 @@ class StudentIdCard extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        StudentAvatar(student: student, size: 64, borderRadius: 10),
+        StudentAvatar(
+          student: student,
+          size: 64,
+          borderRadius: 10,
+          backgroundColor: _plate,
+          initialsColor: _quiet,
+        ),
         const SizedBox(height: 10),
         Text(
           student.name,
@@ -120,13 +153,13 @@ class StudentIdCard extends StatelessWidget {
           style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w800,
-            color: AppColors.black,
+            color: _ink,
           ),
         ),
         if (student.studentNo.isNotEmpty)
           Text(
             'No. ${student.studentNo}',
-            style: const TextStyle(fontSize: 12, color: AppColors.muted),
+            style: const TextStyle(fontSize: 12, color: _quiet),
           ),
       ],
     );

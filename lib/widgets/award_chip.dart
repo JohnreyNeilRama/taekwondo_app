@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/achievement_record.dart';
 
-/// Medal chip for one award, filled with the medal tint so Gold, Silver and
-/// Bronze stay readable at a glance next to the neutral grey chips.
+/// Medal chip for one award, washed with the medal colour so Gold, Silver and
+/// Bronze stay readable at a glance on the dark cards.
 class AwardChip extends StatelessWidget {
   const AwardChip({super.key, required this.award, this.count});
 
@@ -20,8 +20,9 @@ class AwardChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: Color(award.tintValue),
+        color: color.withValues(alpha: 0.16),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -31,7 +32,7 @@ class AwardChip extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 11.5,
               fontWeight: FontWeight.w700,
               color: color,
             ),

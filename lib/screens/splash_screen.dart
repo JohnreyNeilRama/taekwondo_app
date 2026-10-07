@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
 
-/// The loading screen shown while the app opens: the app icon, the app name and
-/// a thin line filling up, in the black / white / red the rest of the app uses.
+/// The loading screen shown while the app opens: the app icon on a soft crimson
+/// glow, the app name and a thin line filling up, on the same dark navy as the
+/// rest of the app.
 ///
 /// It is the first thing the owner sees and it stays up for [minimumDuration]
 /// counted from the moment the app started, however long opening the database
@@ -87,73 +89,108 @@ class _SplashScreenState extends State<SplashScreen>
       curve: const Interval(0, 0.3, curve: Curves.easeOut),
     );
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FadeTransition(
-                opacity: appear,
-                child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.94, end: 1).animate(appear),
-                  child: Container(
-                    width: 132,
-                    height: 132,
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    // The same picture the phone shows for the app. Falls back
-                    // to the drawn TKD mark if the asset cannot be read, so a
-                    // missing file never leaves an empty splash screen.
-                    child: Image.asset(
-                      'assets/icon/app_icon.png',
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) =>
-                          const _FallbackMark(),
-                    ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: AppDark.background,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: AppDark.background,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            // A soft crimson glow behind the icon, fading into the page.
+            const IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(0, -0.25),
+                    radius: 0.85,
+                    colors: [Color(0x40E5334B), Color(0x00E5334B)],
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              const Text(
-                'TKD Records',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.black,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Student Registry',
-                style: TextStyle(fontSize: 13, color: AppColors.muted),
-              ),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: 160,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child: AnimatedBuilder(
-                    animation: _controller,
-                    builder: (context, child) => LinearProgressIndicator(
-                      value: _controller.value,
-                      minHeight: 4,
-                      backgroundColor: AppColors.border,
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        AppColors.red,
+            ),
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FadeTransition(
+                      opacity: appear,
+                      child: ScaleTransition(
+                        scale: Tween<double>(
+                          begin: 0.94,
+                          end: 1,
+                        ).animate(appear),
+                        child: Container(
+                          width: 132,
+                          height: 132,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: AppDark.surface,
+                            borderRadius: BorderRadius.circular(32),
+                            border: Border.all(color: AppDark.border),
+                            boxShadow: AppDark.crimsonGlow,
+                          ),
+                          // The same picture the phone shows for the app. Falls
+                          // back to the drawn TKD mark if the asset cannot be
+                          // read, so a missing file never leaves an empty
+                          // splash screen.
+                          child: Image.asset(
+                            'assets/icon/app_icon.png',
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const _FallbackMark(),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 28),
+                    const Text(
+                      'TKD Records',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: AppDark.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Student Registry',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppDark.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 36),
+                    SizedBox(
+                      width: 160,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: AnimatedBuilder(
+                          animation: _controller,
+                          builder: (context, child) => LinearProgressIndicator(
+                            value: _controller.value,
+                            minHeight: 4,
+                            backgroundColor: AppDark.border,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              AppDark.crimson,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -161,21 +198,22 @@ class _SplashScreenState extends State<SplashScreen>
 }
 
 /// The TKD mark, drawn rather than loaded, used only when the icon file is not
-/// there to be read.
+/// there to be read: white letters on the crimson gradient.
 class _FallbackMark extends StatelessWidget {
   const _FallbackMark();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.black,
+      decoration: const BoxDecoration(gradient: AppDark.crimsonGradient),
       alignment: Alignment.center,
       child: const Text(
         'TKD',
         style: TextStyle(
           color: Colors.white,
-          fontSize: 28,
-          fontWeight: FontWeight.w800,
+          fontSize: 32,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.5,
         ),
       ),
     );

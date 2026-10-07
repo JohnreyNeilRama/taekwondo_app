@@ -4,10 +4,11 @@ import '../models/achievement_record.dart';
 import '../models/student.dart';
 import '../services/achievement_storage.dart';
 import '../services/student_storage.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_page.dart';
 import '../widgets/award_chip.dart';
-import '../widgets/brand_header.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/registry_header.dart';
 import '../widgets/search_field.dart';
 import '../widgets/student_avatar.dart';
 import 'achievement_detail_screen.dart';
@@ -224,87 +225,81 @@ class _AchievementScreenState extends State<AchievementScreen> {
     final total = _records.length;
     return Column(
       children: [
-        const BrandHeader(),
+        const RegistryHeader(),
         Expanded(
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Achievement Record',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // The search box leads the list.
-                      _searchBox(),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'List of Students',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.black,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _countLabel(results.length, total),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.muted,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else if (_students.isEmpty)
-                        const EmptyStateCard(
-                          icon: Icons.groups_outlined,
-                          title: 'No students yet',
-                          message:
-                              'Add a student on the Students page first, then come '
-                              'back to record their achievement.',
-                        )
-                      else if (results.isEmpty)
-                        const EmptyStateCard(
-                          icon: Icons.search_off,
-                          title: 'No matching students',
-                          message: 'Try a different name, nickname or school.',
-                        ),
-                    ],
+          child: AppSheet(
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                    child: PageIntro(
+                      title: 'Achievement Record',
+                      subtitle: _loading
+                          ? null
+                          : _countLabel(results.length, total),
+                    ),
                   ),
                 ),
-              ),
-              if (!_loading && results.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
+                // The search card stays at the top while the list scrolls under
+                // it, so a student can be found from anywhere in a long registry.
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: PinnedBarDelegate(child: _searchBox()),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
+                    child: const SectionLabel('List of Students'),
+                  ),
+                ),
+                if (_loading)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  )
+                else if (_students.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      child: EmptyStateCard(
+                        icon: Icons.groups_outlined,
+                        title: 'No students yet',
+                        message:
+                            'Add a student on the Students page first, then come '
+                            'back to record their achievement.',
+                      ),
+                    ),
+                  )
+                else if (results.isEmpty)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(16, 4, 16, 24),
+                      child: EmptyStateCard(
+                        icon: Icons.search_off,
+                        title: 'No matching students',
+                        message: 'Try a different name, nickname or school.',
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
                         final student = results[index];
                         return _StudentCard(
                           student: student,
                           records: _recordsFor(student.id),
                           onTap: () => _openStudent(student),
                         );
-                      },
-                      childCount: results.length,
+                      }, childCount: results.length),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
@@ -359,69 +354,66 @@ class _StudentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final counts = _medalCounts;
     final nickname = student.nickname;
-    return InkWell(
+    return DarkCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      accent: AppDark.crimson,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            StudentAvatar(
-              student: student,
-              size: 52,
-              borderRadius: 14,
-              initialsFontSize: 16,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      child: Row(
+        children: [
+          StudentAvatar(
+            student: student,
+            size: 52,
+            borderRadius: 16,
+            initialsFontSize: 17,
+            backgroundColor: AppDark.surfaceHigh,
+            initialsColor: AppDark.textSecondary,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  student.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: AppDark.textPrimary,
+                  ),
+                ),
+                if (nickname.isNotEmpty) ...[
+                  const SizedBox(height: 2),
                   Text(
-                    student.name,
+                    '"$nickname"',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.black,
+                      fontSize: 12.5,
+                      fontStyle: FontStyle.italic,
+                      color: AppDark.rose,
                     ),
-                  ),
-                  if (nickname.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '"$nickname"',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.muted,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      AppChip(label: student.studentNo, emphasized: true),
-                      for (final award in Award.all)
-                        if ((counts[award] ?? 0) > 0)
-                          AwardChip(award: award, count: counts[award]),
-                    ],
                   ),
                 ],
-              ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    AppChip(label: student.studentNo, emphasized: true),
+                    for (final award in Award.all)
+                      if ((counts[award] ?? 0) > 0)
+                        AwardChip(award: award, count: counts[award]),
+                  ],
+                ),
+              ],
             ),
-            const Icon(Icons.chevron_right, color: AppColors.muted),
-          ],
-        ),
+          ),
+          const Icon(Icons.chevron_right, color: AppDark.textSecondary),
+        ],
       ),
     );
   }

@@ -90,7 +90,7 @@ void main() {
     expect(find.text('No student records found.'), findsOneWidget);
 
     // Add a student through the Taekwondo Information Sheet form.
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     expect(find.text('STUDENT DETAILS'), findsOneWidget);
     await tester.enterText(
@@ -169,7 +169,7 @@ void main() {
     await tester.tap(find.text('Achievement').last);
     await _settle(tester);
     expect(find.text('Achievement Record'), findsOneWidget);
-    expect(find.text('+ Add Student'), findsNothing);
+    expect(find.text('Add Student'), findsNothing);
     expect(find.text('Many to one'), findsNothing);
     final searchBox = find.byType(TextField);
     expect(searchBox, findsOneWidget);
@@ -196,12 +196,19 @@ void main() {
   testWidgets('Promotion "Pending" offers students added after app launch', (
     WidgetTester tester,
   ) async {
+    // The Promotion page now stacks the header, six belt cards, the title and
+    // a pinned search box above the list, so on the default 800x600 test
+    // window the first record card sits below the visible area and is not
+    // built yet. A taller window puts it on screen.
+    tester.view.physicalSize = const Size(800, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await _startApp(tester);
 
     // The Promotion screen is built at launch by the IndexedStack, before
     // any student exists. Adding a student afterwards must still make them
     // turn up as pending for a belt.
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -274,7 +281,7 @@ void main() {
       await _startApp(tester);
 
       // Seed one student.
-      await tester.tap(find.text('+ Add Student').first);
+      await tester.tap(find.text('Add Student').first);
       await _settle(tester);
       await tester.enterText(
         find.widgetWithText(TextField, 'Enter full name'),
@@ -315,7 +322,7 @@ void main() {
   ) async {
     await _startApp(tester);
 
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -343,7 +350,7 @@ void main() {
     await _startApp(tester);
 
     // Seed one student.
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -377,7 +384,7 @@ void main() {
     await _startApp(tester);
 
     // Seed one student: achievements always attach to the registry.
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -392,7 +399,7 @@ void main() {
 
     // There is no Add Student action on this page: tapping the student's card
     // opens their records, which no longer carry the old "Student" header.
-    expect(find.text('+ Add Student'), findsNothing);
+    expect(find.text('Add Student'), findsNothing);
     await tester.tap(find.text('Nguyen Van A'));
     await _settle(tester);
     expect(find.text('Achievement Details'), findsOneWidget);
@@ -484,7 +491,7 @@ void main() {
   ) async {
     await _startApp(tester);
 
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -521,7 +528,7 @@ void main() {
   testWidgets('Undo puts a deleted student back', (WidgetTester tester) async {
     await _startApp(tester);
 
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -551,7 +558,7 @@ void main() {
   ) async {
     await _startApp(tester);
 
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),
@@ -596,7 +603,7 @@ void main() {
   ) async {
     await _startApp(tester);
 
-    await tester.tap(find.text('+ Add Student').first);
+    await tester.tap(find.text('Add Student').first);
     await _settle(tester);
     await tester.enterText(
       find.widgetWithText(TextField, 'Enter full name'),

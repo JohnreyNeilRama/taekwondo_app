@@ -6,7 +6,11 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../services/attendance_storage.dart';
 import '../services/class_schedule.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_input.dart';
+import '../widgets/app_page.dart';
+import '../widgets/registry_header.dart';
 import '../widgets/student_avatar.dart';
 import 'attendance_report_screen.dart';
 import 'class_days_screen.dart';
@@ -16,8 +20,9 @@ import 'class_days_screen.dart';
 /// is already present.
 ///
 /// Where the camera is not available (a computer) or a student forgot their
-/// code, the student number can be typed instead: the keyboard button in the
-/// header does the same check-in.
+/// code, the student number can be typed instead: the keyboard button does the
+/// same check-in. On a narrow phone that button sits on the camera picture
+/// rather than in the header, so the title keeps its room.
 class AttendanceScannerScreen extends StatefulWidget {
   const AttendanceScannerScreen({super.key});
 
@@ -53,6 +58,9 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   String? _lastRaw;
   DateTime? _lastRawAt;
   static const Duration _sameCodePause = Duration(seconds: 3);
+
+  /// Below this width the header has room for two buttons, not three.
+  static const double _narrowWidth = 380;
 
   /// The camera plugin works on phones; on a computer the typed number is the
   /// way to check in.
@@ -210,13 +218,43 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+    final narrow = MediaQuery.sizeOf(context).width < _narrowWidth;
+    return AppPage(
+      title: 'Attendance',
+      subtitle: _dayLabel(DateTime.now()),
+      actions: [
+        HeaderIconButton(
+          icon: Icons.event_note_outlined,
+          tooltip: 'Attendance report',
+          onPressed: _openReport,
+        ),
+        HeaderIconButton(
+          icon: Icons.calendar_view_week,
+          tooltip: 'Class days',
+          // Amber while today's training is cancelled, so the owner sees it
+          // without opening the page.
+          color: _cancelledToday ? AppColors.cancelled : null,
+          onPressed: _openClassDays,
+        ),
+        // On a narrow phone this button moves onto the camera picture (below)
+        // so the title is not squeezed.
+        if (!narrow || !_cameraSupported)
+          HeaderIconButton(
+            icon: Icons.keyboard_outlined,
+            tooltip: 'Enter student number',
+            onPressed: _enterNumber,
+          ),
+      ],
+      child: Column(
         children: [
-          _buildHeader(context),
           if (_cameraSupported)
-            Expanded(flex: 5, child: _cameraArea())
+            Expanded(
+              flex: 5,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                child: _cameraCard(showTypeButton: narrow),
+              ),
+            )
           else
             _noCameraCard(),
           Expanded(flex: 4, child: _todayList()),
@@ -225,99 +263,63 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    final now = DateTime.now();
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 4, 12),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Attendance',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+  /// The camera picture in a rounded card, with an aiming frame, the answer of
+  /// the last scan along its foot and, on a narrow phone, the "type a number"
+  /// button in its corner.
+  Widget _cameraCard({required bool showTypeButton}) {
+    final last = _last;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: AppDark.border),
+        boxShadow: AppDark.cardShadow,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(23),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            MobileScanner(
+              onDetect: _onDetect,
+              errorBuilder: (context, error) => _CameraProblem(error: error),
+            ),
+            // A frame to aim the code into. Purely visual: the whole picture
+            // is scanned, not only the inside of the frame.
+            IgnorePointer(
+              child: Center(
+                child: FractionallySizedBox(
+                  widthFactor: 0.62,
+                  child: AspectRatio(
+                    aspectRatio: 1,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.75),
+                          width: 3,
+                        ),
                       ),
                     ),
-                    Text(
-                      _dayLabel(now),
-                      style: const TextStyle(
-                        color: Color(0xFFD1D5DB),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-              IconButton(
-                tooltip: 'Attendance report',
-                icon: const Icon(Icons.event_note_outlined, color: Colors.white),
-                onPressed: _openReport,
+            ),
+            if (showTypeButton)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: _TypeNumberButton(onPressed: _enterNumber),
               ),
-              IconButton(
-                tooltip: 'Class days',
-                icon: const Icon(Icons.calendar_view_week, color: Colors.white),
-                onPressed: _openClassDays,
+            if (last != null)
+              Positioned(
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: _ResultBanner(outcome: _describe(last)),
               ),
-              IconButton(
-                tooltip: 'Enter student number',
-                icon: const Icon(Icons.keyboard_outlined, color: Colors.white),
-                onPressed: _enterNumber,
-              ),
-            ],
-          ),
+          ],
         ),
       ),
-    );
-  }
-
-  Widget _cameraArea() {
-    final last = _last;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        ClipRect(
-          child: MobileScanner(
-            onDetect: _onDetect,
-            errorBuilder: (context, error) => _CameraProblem(error: error),
-          ),
-        ),
-        // A frame to aim the code into. Purely visual: the whole picture is
-        // scanned, not only the inside of the frame.
-        IgnorePointer(
-          child: Center(
-            child: Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white70, width: 3),
-              ),
-            ),
-          ),
-        ),
-        if (last != null)
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: _ResultBanner(outcome: _describe(last)),
-          ),
-      ],
     );
   }
 
@@ -327,34 +329,34 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                const Icon(
-                  Icons.no_photography_outlined,
-                  size: 32,
-                  color: AppColors.muted,
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Camera scanning works on Android and iOS phones. Here you '
-                  'can record attendance by typing the student number.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 13, color: AppColors.muted),
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: _enterNumber,
-                  child: const Text('Enter student number'),
-                ),
-              ],
+          DarkCard(
+            padding: const EdgeInsets.all(20),
+            child: SizedBox(
+              width: double.infinity,
+              child: Column(
+                children: [
+                  const IconPlate(
+                    icon: Icons.no_photography_outlined,
+                    size: 56,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Camera scanning works on Android and iOS phones. Here you '
+                    'can record attendance by typing the student number.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: AppColors.muted,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: _enterNumber,
+                    child: const Text('Enter student number'),
+                  ),
+                ],
+              ),
             ),
           ),
           if (last != null) ...[
@@ -367,88 +369,97 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   }
 
   Widget _todayList() {
-    return Container(
-      width: double.infinity,
-      color: AppColors.background,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-            child: Text(
-              _cancelledToday
-                  ? 'Present today (-)'
-                  : 'Present today (${_today.length})',
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppColors.black,
-              ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 10),
+          child: Text(
+            _cancelledToday
+                ? 'Present today (-)'
+                : 'Present today (${_today.length})',
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+              color: AppColors.black,
             ),
           ),
-          Expanded(
-            child: _today.isEmpty
-                ? Center(
+        ),
+        Expanded(
+          child: _today.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Text(
                       _cancelledToday
                           ? 'Training is cancelled today. No one is counted '
                                 'present or absent.'
                           : 'No one has clocked in yet today.',
-                      style: TextStyle(fontSize: 13, color: AppColors.muted),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        height: 1.4,
+                        color: AppColors.muted,
+                      ),
                     ),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: _today.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (context, index) {
-                      final entry = _today[index];
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: Row(
-                          children: [
-                            StudentAvatar(
-                              student: entry.student,
-                              size: 40,
-                              borderRadius: 10,
-                              initialsFontSize: 14,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                entry.student.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.black,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              _formatTime(entry.checkedInAt),
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.muted,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
                   ),
-          ),
-        ],
-      ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: _today.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final entry = _today[index];
+                    return Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          StudentAvatar(
+                            student: entry.student,
+                            size: 44,
+                            borderRadius: 12,
+                            initialsFontSize: 15,
+                            backgroundColor: AppDark.surfaceHigh,
+                            initialsColor: AppDark.textSecondary,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              entry.student.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.black,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _formatTime(entry.checkedInAt),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.muted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 
@@ -525,7 +536,14 @@ class _ResultBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: outcome.color,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.35),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -559,6 +577,50 @@ class _ResultBanner extends StatelessWidget {
   }
 }
 
+/// The "type a number" button on the camera picture of a narrow phone: a dark
+/// translucent pill, so it reads over any camera image.
+class _TypeNumberButton extends StatelessWidget {
+  const _TypeNumberButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Enter student number',
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.55),
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onPressed,
+          child: const SizedBox(
+            height: 44,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 14),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.keyboard_outlined, size: 18, color: Colors.white),
+                  SizedBox(width: 6),
+                  Text(
+                    'Type number',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Shown in place of the camera when it cannot start: most often the camera
 /// permission was refused.
 class _CameraProblem extends StatelessWidget {
@@ -570,23 +632,27 @@ class _CameraProblem extends StatelessWidget {
   Widget build(BuildContext context) {
     final denied = error.errorCode == MobileScannerErrorCode.permissionDenied;
     return Container(
-      color: AppColors.black,
+      color: AppDark.surface,
       alignment: Alignment.center,
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.videocam_off_outlined, color: Colors.white, size: 36),
-          const SizedBox(height: 12),
+          const IconPlate(icon: Icons.videocam_off_outlined, size: 56),
+          const SizedBox(height: 14),
           Text(
             denied
                 ? 'Camera permission is off. Allow the camera for this app in '
                       'the phone settings, then come back. You can still type a '
-                      'student number with the keyboard button above.'
+                      'student number with the keyboard button.'
                 : 'The camera could not start. You can still type a student '
-                      'number with the keyboard button above.',
+                      'number with the keyboard button.',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
+            style: const TextStyle(
+              color: AppDark.textSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
           ),
         ],
       ),
@@ -620,7 +686,7 @@ class _StudentNumberDialogState extends State<_StudentNumberDialog> {
         controller: _controller,
         autofocus: true,
         textCapitalization: TextCapitalization.characters,
-        decoration: const InputDecoration(hintText: 'e.g. 12 or TKD-0012'),
+        decoration: AppInput.decoration(hint: 'e.g. 12 or TKD-0012'),
         onSubmitted: (value) => Navigator.of(context).pop(value),
       ),
       actions: [

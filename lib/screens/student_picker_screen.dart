@@ -4,7 +4,8 @@ import '../models/promotion_record.dart';
 import '../models/student.dart';
 import '../services/promotion_storage.dart';
 import '../services/student_storage.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_page.dart';
 import '../widgets/empty_state_card.dart';
 import '../widgets/search_field.dart';
 import '../widgets/student_avatar.dart';
@@ -128,38 +129,8 @@ class _StudentPickerScreenState extends State<StudentPickerScreen> {
         .toList();
   }
 
-  Widget _header(BuildContext context) {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                widget.pendingOnly ? 'Pending Students' : 'Select Student',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   /// Search box, styled and laid out the same way as the search field on the
-  /// Achievement and Students pages.
+  /// Achievement and Promotion pages.
   Widget _searchField() {
     return AppSearchField(
       controller: _searchController,
@@ -173,89 +144,110 @@ class _StudentPickerScreenState extends State<StudentPickerScreen> {
     );
   }
 
+  /// What the list shows instead of students: a spinner, an error, or the
+  /// reason there is nobody to pick.
+  Widget? _placeholder(List<Student> results) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_failed) {
+      return const EmptyStateCard(
+        icon: Icons.error_outline,
+        title: 'Could not load your students',
+        message: 'Please go back and try again.',
+      );
+    }
+    if (_registryCount == 0) {
+      return const EmptyStateCard(
+        icon: Icons.groups_outlined,
+        title: 'No students yet',
+        message:
+            'Add a student on the Students page first, then come '
+            'back to record their promotion.',
+      );
+    }
+    if (_students.isEmpty) {
+      // Only reachable in pending mode: the registry has students, so an empty
+      // list means every one of them has a belt.
+      return const EmptyStateCard(
+        icon: Icons.verified_outlined,
+        title: 'No pending students',
+        message: 'Every student in your registry already has a belt.',
+      );
+    }
+    if (results.isEmpty) {
+      return const EmptyStateCard(
+        icon: Icons.search_off,
+        title: 'No matching students.',
+        message: 'Try a different name or registry number.',
+      );
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final results = _results;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          _header(context),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                if (widget.pendingOnly)
-                  const Text(
-                    'These students are waiting to be assigned a belt.',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.black,
-                    ),
-                  )
-                else ...[
-                  const Text(
-                    'Select Student',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Choose from your existing records (${_students.length})',
-                    style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                ],
-                const SizedBox(height: 12),
-                // The search box sits at the bottom of the header block, in
-                // the same style used on the Achievement and Students pages.
-                _searchField(),
-                const SizedBox(height: 16),
-                if (_loading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_failed)
-                  const EmptyStateCard(
-                    icon: Icons.error_outline,
-                    title: 'Could not load your students',
-                    message: 'Please go back and try again.',
-                  )
-                else if (_registryCount == 0)
-                  const EmptyStateCard(
-                    icon: Icons.groups_outlined,
-                    title: 'No students yet',
-                    message:
-                        'Add a student on the Students page first, then come '
-                        'back to record their promotion.',
-                  )
-                else if (_students.isEmpty)
-                  // Only reachable in pending mode: the registry has students,
-                  // so an empty list means every one of them has a belt.
-                  const EmptyStateCard(
-                    icon: Icons.verified_outlined,
-                    title: 'No pending students',
-                    message:
-                        'Every student in your registry already has a belt.',
-                  )
-                else if (results.isEmpty)
-                  const EmptyStateCard(
-                    icon: Icons.search_off,
-                    title: 'No matching students.',
-                    message: 'Try a different name or registry number.',
-                  )
-                else
-                  for (final student in results)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _StudentOption(
-                        student: student,
-                        onTap: () => Navigator.of(context).pop(student),
+    final placeholder = _placeholder(results);
+    return AppPage(
+      title: widget.pendingOnly ? 'Pending Students' : 'Select Student',
+      subtitle: widget.pendingOnly
+          ? null
+          : 'Choose from your existing records (${_students.length})',
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 22, 16, 6),
+              child: widget.pendingOnly
+                  ? const Text(
+                      'These students are waiting to be assigned a belt.',
+                      style: TextStyle(
+                        fontSize: 15,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                        color: AppDark.textPrimary,
+                      ),
+                    )
+                  : const Text(
+                      'Select Student',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                        color: AppDark.textPrimary,
                       ),
                     ),
-              ],
             ),
           ),
+          // The search card stays at the top while the list scrolls under it.
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: PinnedBarDelegate(child: _searchField()),
+          ),
+          if (placeholder != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                child: placeholder,
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final student = results[index];
+                  return _StudentOption(
+                    student: student,
+                    onTap: () => Navigator.of(context).pop(student),
+                  );
+                }, childCount: results.length),
+              ),
+            ),
         ],
       ),
     );
@@ -271,47 +263,44 @@ class _StudentOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return DarkCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      accent: AppDark.crimson,
       onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            StudentAvatar(
-              student: student,
-              size: 44,
-              borderRadius: 12,
-              initialsFontSize: 15,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    student.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.black,
-                    ),
+      child: Row(
+        children: [
+          StudentAvatar(
+            student: student,
+            size: 52,
+            borderRadius: 16,
+            initialsFontSize: 17,
+            backgroundColor: AppDark.surfaceHigh,
+            initialsColor: AppDark.textSecondary,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  student.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.2,
+                    color: AppDark.textPrimary,
                   ),
-                  const SizedBox(height: 4),
-                  AppChip(label: student.studentNo),
-                ],
-              ),
+                ),
+                const SizedBox(height: 6),
+                AppChip(label: student.studentNo, emphasized: true),
+              ],
             ),
-            const Icon(Icons.chevron_right, color: AppColors.muted),
-          ],
-        ),
+          ),
+          const Icon(Icons.chevron_right, color: AppDark.textSecondary),
+        ],
       ),
     );
   }

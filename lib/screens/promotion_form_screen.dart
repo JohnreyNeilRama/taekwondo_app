@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/belt.dart';
 import '../models/promotion_record.dart';
 import '../models/student.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_input.dart';
+import '../widgets/app_page.dart';
 import '../widgets/empty_state_card.dart';
 import '../widgets/student_avatar.dart';
 
@@ -94,115 +96,74 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+    return AppPage(
+      title: _isEditing ? 'Edit Promotion' : 'Add Promotion',
+      subtitle: widget.student.name,
+      bottom: _actions(),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
         children: [
-          _header(),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-              children: [
-                _studentCard(),
-                const SizedBox(height: 20),
-                const Text(
-                  'PROMOTION DETAILS',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.6,
-                    color: AppColors.muted,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _beltField(),
-                const SizedBox(height: 14),
-                _dateField(),
-                const SizedBox(height: 20),
-                const NoticeCard(
-                  icon: Icons.info_outline,
-                  message:
-                      'This record is linked to the student from your '
-                      'registry. No new student is created here.',
-                ),
-              ],
-            ),
+          _studentCard(),
+          const SizedBox(height: 8),
+          const SectionLabel('PROMOTION DETAILS'),
+          const SizedBox(height: 12),
+          _beltField(),
+          const SizedBox(height: 16),
+          _dateField(),
+          const SizedBox(height: 24),
+          const NoticeCard(
+            icon: Icons.info_outline,
+            message:
+                'This record is linked to the student from your '
+                'registry. No new student is created here.',
           ),
-          _actions(),
         ],
-      ),
-    );
-  }
-
-  Widget _header() {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                _isEditing ? 'Edit Promotion' : 'Add Promotion',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
 
   /// Read-only summary of the selected registry student.
   Widget _studentCard() {
-    return SectionCard(
-      icon: Icons.person_outline,
-      title: 'Student',
-      subtitle: 'Selected from your Students registry',
-      showDivider: false,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(
-          children: [
-            StudentAvatar(
-              student: widget.student,
-              size: 46,
-              borderRadius: 12,
-              initialsFontSize: 16,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.student.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.black,
-                    ),
+    return DarkCard(
+      margin: const EdgeInsets.only(bottom: 16),
+      accent: AppDark.crimson,
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          StudentAvatar(
+            student: widget.student,
+            size: 56,
+            borderRadius: 16,
+            initialsFontSize: 18,
+            backgroundColor: AppDark.surfaceHigh,
+            initialsColor: AppDark.textSecondary,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Student',
+                  style: TextStyle(fontSize: 12, color: AppDark.textSecondary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.student.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppDark.textPrimary,
                   ),
-                  const SizedBox(height: 4),
-                  AppChip(label: widget.student.studentNo),
-                ],
-              ),
+                ),
+                const SizedBox(height: 6),
+                AppChip(label: widget.student.studentNo, emphasized: true),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -211,30 +172,18 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 2, bottom: 6),
-          child: Text(
-            'Current / New Belt',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.muted,
-            ),
-          ),
-        ),
+        AppInput.label('Current / New Belt'),
         Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
-          ),
+          decoration: AppInput.box(),
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _belt,
               isExpanded: true,
-              icon: const Icon(Icons.expand_more, color: AppColors.black),
-              style: const TextStyle(fontSize: 14, color: AppColors.black),
+              dropdownColor: AppDark.surfaceHigh,
+              borderRadius: BorderRadius.circular(16),
+              icon: const Icon(Icons.expand_more, color: AppDark.icon),
+              style: const TextStyle(fontSize: 15, color: AppDark.textPrimary),
               items: [
                 for (final belt in BeltCatalog.grades)
                   DropdownMenuItem<String>(value: belt, child: Text(belt)),
@@ -251,50 +200,28 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 2, bottom: 6),
-          child: Text(
-            'Last Promotion Date',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.muted,
-            ),
-          ),
-        ),
+        AppInput.label('Last Promotion Date'),
         InkWell(
           onTap: _pickDate,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(14),
           child: InputDecorator(
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 14,
-              ),
-              prefixIcon: const Icon(
-                Icons.event_outlined,
-                color: AppColors.black,
-              ),
+            decoration: AppInput.decoration(
+              prefixIcon: const Icon(Icons.event_outlined),
               suffixIcon: _date == null
                   ? null
                   : IconButton(
                       tooltip: 'Clear date',
-                      icon: const Icon(Icons.close, color: AppColors.muted),
+                      icon: const Icon(Icons.close),
                       onPressed: () => setState(() => _date = null),
                     ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(color: AppColors.border),
-              ),
             ),
             child: Text(
               _date == null ? 'Select date' : _format(_date!),
               style: TextStyle(
-                fontSize: 14,
-                color: _date == null ? AppColors.muted : AppColors.black,
+                fontSize: 15,
+                color: _date == null
+                    ? AppDark.textSecondary
+                    : AppDark.textPrimary,
               ),
             ),
           ),
@@ -304,33 +231,26 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
   }
 
   Widget _actions() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton(
-                  onPressed: _save,
-                  child: Text(_isEditing ? 'Save Changes' : 'Save Record'),
-                ),
-              ),
-            ],
+    return AppActionBar(
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
           ),
-        ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: CrimsonButton(
+              label: _isEditing ? 'Save Changes' : 'Save Record',
+              icon: Icons.check_rounded,
+              expand: true,
+              onPressed: _save,
+            ),
+          ),
+        ],
       ),
     );
   }

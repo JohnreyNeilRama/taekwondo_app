@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../services/app_database.dart';
 import '../services/legacy_json_import.dart';
 import '../services/student_storage.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_page.dart';
 import 'splash_screen.dart';
 
 /// Opens the database before the first screen and shows [child] once it is
@@ -158,11 +160,12 @@ class _StartupFailure extends StatelessWidget {
         ),
         actions: [
           TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppDark.icon),
             onPressed: () => Navigator.of(dialogContext).pop(false),
             child: const Text('Cancel'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            style: TextButton.styleFrom(foregroundColor: AppDark.crimson),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Start empty'),
           ),
@@ -175,69 +178,76 @@ class _StartupFailure extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: AppDark.background,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(20),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Icon(
-                    Icons.error_outline,
-                    size: 48,
-                    color: AppColors.red,
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'The registry could not be opened',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Your records are not deleted. Check that the device has '
-                    'free space, then try again.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 13, color: AppColors.muted),
-                  ),
-                  const SizedBox(height: 20),
-                  FilledButton(
-                    onPressed: onTryAgain,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(0, 44),
-                    ),
-                    child: const Text('Try again'),
-                  ),
-                  const SizedBox(height: 10),
-                  OutlinedButton(
-                    onPressed: () => _confirmStartFresh(context),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 44),
-                    ),
-                    child: const Text('Set the file aside and start empty'),
-                  ),
-                  if (error != null) ...[
-                    const SizedBox(height: 20),
-                    Text(
-                      '$error',
-                      maxLines: 4,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppColors.muted,
+              child: DarkCard(
+                accent: AppDark.crimson,
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Center(
+                      child: IconPlate(
+                        icon: Icons.error_outline,
+                        size: 64,
+                        color: AppDark.crimson,
                       ),
                     ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'The registry could not be opened',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.2,
+                        color: AppDark.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Your records are not deleted. Check that the device has '
+                      'free space, then try again.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.4,
+                        color: AppDark.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    CrimsonButton(
+                      label: 'Try again',
+                      icon: Icons.refresh,
+                      expand: true,
+                      onPressed: onTryAgain,
+                    ),
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      onPressed: () => _confirmStartFresh(context),
+                      child: const Text('Set the file aside and start empty'),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 20),
+                      Text(
+                        '$error',
+                        maxLines: 4,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppDark.textSecondary,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

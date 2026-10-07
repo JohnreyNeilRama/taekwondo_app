@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/attendance_storage.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
 
 /// The ATTENDANCE section of a student's page: how many days they came, when
@@ -116,11 +117,12 @@ class _AttendanceHistoryCardState extends State<AttendanceHistoryCard> {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.border),
+        boxShadow: AppDark.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../models/achievement_record.dart';
 import '../models/student.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_input.dart';
 import '../widgets/award_chip.dart';
 import '../widgets/empty_state_card.dart';
 import '../widgets/student_avatar.dart';
@@ -153,7 +154,6 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: SingleChildScrollView(
@@ -164,16 +164,16 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
             children: [
               _title(),
               const SizedBox(height: 16),
-              _fieldLabel('Student'),
+              AppInput.label('Student'),
               _studentField(),
               const SizedBox(height: 14),
-              _fieldLabel('Date'),
+              AppInput.label('Date'),
               _dateField(),
               const SizedBox(height: 14),
-              _fieldLabel('Event'),
+              AppInput.label('Event'),
               _eventField(),
               const SizedBox(height: 14),
-              _fieldLabel('Achievement'),
+              AppInput.label('Achievement'),
               _awardField(),
               const SizedBox(height: 20),
               _actions(),
@@ -191,32 +191,19 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
           child: Text(
             _isEditing ? 'Edit Achievement' : 'Add Achievement',
             style: const TextStyle(
-              fontSize: 17,
+              fontSize: 18,
               fontWeight: FontWeight.w800,
-              color: AppColors.black,
+              letterSpacing: -0.2,
+              color: AppDark.textPrimary,
             ),
           ),
         ),
         IconButton(
           tooltip: 'Close',
           onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close, color: AppColors.muted),
+          icon: const Icon(Icons.close, color: AppDark.textSecondary),
         ),
       ],
-    );
-  }
-
-  Widget _fieldLabel(String label) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 2, bottom: 6),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: AppColors.muted,
-        ),
-      ),
     );
   }
 
@@ -228,9 +215,11 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
       children: [
         StudentAvatar(
           student: student,
-          size: 38,
-          borderRadius: 10,
-          initialsFontSize: 13,
+          size: 40,
+          borderRadius: 12,
+          initialsFontSize: 14,
+          backgroundColor: AppDark.surfaceHigh,
+          initialsColor: AppDark.textSecondary,
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -242,34 +231,32 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 14.5,
                   fontWeight: FontWeight.w700,
-                  color: student == null ? AppColors.muted : AppColors.black,
+                  color: student == null
+                      ? AppDark.textSecondary
+                      : AppDark.textPrimary,
                 ),
               ),
               if (student != null) ...[
                 const SizedBox(height: 4),
-                AppChip(label: student.studentNo),
+                AppChip(label: student.studentNo, emphasized: true),
               ],
             ],
           ),
         ),
         if (!_isEditing)
-          const Icon(Icons.chevron_right, color: AppColors.muted),
+          const Icon(Icons.chevron_right, color: AppDark.textSecondary),
       ],
     );
 
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: AppInput.box(),
       child: _isEditing
           ? Padding(padding: const EdgeInsets.all(12), child: content)
           : InkWell(
               onTap: _pickStudent,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(14),
               child: Padding(padding: const EdgeInsets.all(12), child: content),
             ),
     );
@@ -278,34 +265,23 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
   Widget _dateField() {
     return InkWell(
       onTap: _pickDate,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(14),
       child: InputDecorator(
-        decoration: InputDecoration(
-          filled: true,
-          fillColor: Colors.white,
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 14,
-            vertical: 14,
-          ),
-          prefixIcon: const Icon(Icons.event_outlined, color: AppColors.black),
+        decoration: AppInput.decoration(
+          prefixIcon: const Icon(Icons.event_outlined),
           suffixIcon: _date == null
               ? null
               : IconButton(
                   tooltip: 'Clear date',
-                  icon: const Icon(Icons.close, color: AppColors.muted),
+                  icon: const Icon(Icons.close),
                   onPressed: () => setState(() => _date = null),
                 ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: AppColors.border),
-          ),
         ),
         child: Text(
           _date == null ? 'Select a date' : _format(_date!),
           style: TextStyle(
-            fontSize: 14,
-            color: _date == null ? AppColors.muted : AppColors.black,
+            fontSize: 15,
+            color: _date == null ? AppDark.textSecondary : AppDark.textPrimary,
           ),
         ),
       ),
@@ -316,21 +292,10 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
     return TextField(
       controller: _eventController,
       textInputAction: TextInputAction.done,
-      decoration: InputDecoration(
-        hintText: 'e.g. National Tournament',
-        hintStyle: const TextStyle(fontSize: 13, color: AppColors.muted),
-        prefixIcon: const Icon(
-          Icons.emoji_events_outlined,
-          color: AppColors.black,
-        ),
-        filled: true,
-        fillColor: Colors.white,
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(vertical: 14),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
+      style: const TextStyle(fontSize: 15, color: AppDark.textPrimary),
+      decoration: AppInput.decoration(
+        hint: 'e.g. National Tournament',
+        prefixIcon: const Icon(Icons.emoji_events_outlined),
       ),
     );
   }
@@ -338,18 +303,16 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
   /// Gold / Silver / Bronze, shown with the medal colour of each option.
   Widget _awardField() {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
+      decoration: AppInput.box(),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _award,
           isExpanded: true,
-          icon: const Icon(Icons.expand_more, color: AppColors.black),
-          style: const TextStyle(fontSize: 14, color: AppColors.black),
+          dropdownColor: AppDark.surfaceHigh,
+          borderRadius: BorderRadius.circular(16),
+          icon: const Icon(Icons.expand_more, color: AppDark.icon),
+          style: const TextStyle(fontSize: 15, color: AppDark.textPrimary),
           items: [
             for (final award in Award.all)
               DropdownMenuItem<String>(
@@ -371,7 +334,7 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
             padding: EdgeInsets.only(bottom: 12),
             child: Text(
               'Pick a student and describe the event to save this award.',
-              style: TextStyle(fontSize: 12, color: AppColors.muted),
+              style: TextStyle(fontSize: 12.5, color: AppDark.textSecondary),
             ),
           ),
         Row(
@@ -379,19 +342,6 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
             Expanded(
               child: OutlinedButton(
                 onPressed: () => Navigator.of(context).pop(),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  foregroundColor: AppColors.black,
-                  backgroundColor: Colors.white,
-                  side: const BorderSide(color: AppColors.border),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
                 child: const Text('Cancel'),
               ),
             ),
@@ -399,16 +349,6 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
             Expanded(
               child: FilledButton(
                 onPressed: _canSave ? _save : null,
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size(0, 44),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  textStyle: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
                 child: Text(_isEditing ? 'Save Changes' : 'Save Record'),
               ),
             ),

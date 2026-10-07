@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -12,7 +13,9 @@ import 'screens/security_gate.dart';
 import 'screens/startup_gate.dart';
 import 'screens/students_screen.dart';
 import 'services/backup_service.dart';
+import 'theme/app_dark.dart';
 import 'theme/app_theme.dart';
+import 'widgets/app_nav_bar.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,7 +60,7 @@ class _HomeShellState extends State<HomeShell> {
   /// It opens the attendance scanner instead of switching destination, so the
   /// four screens keep the indexes 0..3 inside the [IndexedStack] and only the
   /// bar positions around the button are shifted.
-  static const int _scanSlot = 2;
+  static const int _scanSlot = AppNavBar.scanSlot;
 
   int _index = 0;
 
@@ -127,76 +130,35 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _index,
-        children: [
-          StudentsScreen(visits: _visits),
-          PromotionScreen(visits: _visits),
-          AchievementScreen(visits: _visits),
-          DataTransferScreen(visits: _visits),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // Light status-bar icons over the dark headers, and a navigation area that
+      // blends into the dark bottom bar instead of showing a white strip under
+      // it.
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: AppDark.navBar,
+        systemNavigationBarIconBrightness: Brightness.light,
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
-          border: Border(top: BorderSide(color: AppColors.border)),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _barIndex,
-          onTap: _onBarTap,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: AppColors.surface,
-          elevation: 0,
-          selectedItemColor: AppColors.red,
-          unselectedItemColor: AppColors.muted,
-          selectedLabelStyle: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: const TextStyle(fontSize: 12),
-          items: [
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.groups_outlined),
-              label: 'Students',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.emoji_events_outlined),
-              label: 'Promotion',
-            ),
-            // The attendance scanner. Drawn as a red button so it reads as an
-            // action, not as one more page: it is never the highlighted slot.
-            BottomNavigationBarItem(
-              icon: Container(
-                width: 32,
-                height: 32,
-                decoration: const BoxDecoration(
-                  color: AppColors.red,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.qr_code_scanner,
-                  size: 20,
-                  color: Colors.white,
-                ),
-              ),
-              label: 'Scan',
-            ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.workspace_premium_outlined),
-              label: 'Achievement',
-            ),
-            // Kept short so the bar stays readable on narrow phones; the
-            // screen itself carries the full "Import / Export Data" title.
-            // The dot appears while records are waiting to be exported, so the
-            // owner is reminded to back up.
-            BottomNavigationBarItem(
-              icon: _backupDue
-                  ? const Badge(child: Icon(Icons.swap_horiz_outlined))
-                  : const Icon(Icons.swap_horiz_outlined),
-              label: 'Data',
-            ),
+      child: Scaffold(
+        // Every page now sits on the same dark navy.
+        backgroundColor: AppDark.background,
+        body: IndexedStack(
+          index: _index,
+          children: [
+            StudentsScreen(visits: _visits),
+            PromotionScreen(visits: _visits),
+            AchievementScreen(visits: _visits),
+            DataTransferScreen(visits: _visits),
           ],
+        ),
+        // The dot on the Data slot appears while records are waiting to be
+        // exported, so the owner is reminded to back up.
+        bottomNavigationBar: AppNavBar(
+          selected: _barIndex,
+          onSelected: _onBarTap,
+          showDataBadge: _backupDue,
         ),
       ),
     );

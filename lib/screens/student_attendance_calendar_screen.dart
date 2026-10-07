@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import '../models/student.dart';
 import '../services/attendance_storage.dart';
 import '../services/class_schedule.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
-import '../widgets/student_avatar.dart';
+import '../widgets/app_page.dart';
 
 const Color _presentGreen = Color(0xFF16A34A);
 
@@ -271,14 +272,15 @@ class _StudentAttendanceCalendarScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+    final student = widget.student;
+    return AppPage(
+      title: student.name.isEmpty ? 'Unnamed student' : student.name,
+      subtitle: 'Attendance calendar',
+      child: Column(
         children: [
-          _buildHeader(),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
               children: [
                 _calendarCard(),
                 const SizedBox(height: 16),
@@ -305,65 +307,14 @@ class _StudentAttendanceCalendarScreenState
     );
   }
 
-  Widget _buildHeader() {
-    final student = widget.student;
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 16, 12),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-              StudentAvatar(
-                student: student,
-                size: 40,
-                shape: BoxShape.circle,
-                backgroundColor: AppColors.red,
-                initialsColor: Colors.white,
-                initialsFontSize: 13,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      student.name.isEmpty ? 'Unnamed student' : student.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Text(
-                      'Attendance calendar',
-                      style: TextStyle(color: Color(0xFFD1D5DB), fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _calendarCard() {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        color: AppDark.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDark.border),
+        boxShadow: AppDark.cardShadow,
       ),
       child: GestureDetector(
         // Swipe left for the next month, right for the previous one.

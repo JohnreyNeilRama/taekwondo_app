@@ -10,6 +10,7 @@ import 'package:tkd_app/screens/security_gate.dart';
 import 'package:tkd_app/screens/splash_screen.dart';
 import 'package:tkd_app/services/app_database.dart';
 import 'package:tkd_app/services/security_service.dart';
+import 'package:tkd_app/widgets/app_nav_bar.dart';
 
 /// Cheap derivation cost while tests run; the app's own setting would make
 /// every sign-in in a test take about a second.
@@ -258,7 +259,7 @@ void main() {
       await _pastSplash(tester);
       await _logIn(tester, _password);
 
-      final bar = find.byType(BottomNavigationBar);
+      final bar = find.byType(AppNavBar);
       expect(bar, findsOneWidget);
       for (final label in ['Students', 'Promotion', 'Scan', 'Achievement', 'Data']) {
         expect(
@@ -270,10 +271,7 @@ void main() {
       // The Profile destination is gone, and its Security section with it.
       expect(find.text('Profile'), findsNothing);
       expect(find.text('Change Password'), findsNothing);
-      expect(
-        tester.widget<BottomNavigationBar>(bar).items,
-        hasLength(5),
-      );
+      expect(AppNavBar.labels, hasLength(5));
       // Five labels fit the bar without pushing anything out of it.
       expect(tester.takeException(), isNull);
 

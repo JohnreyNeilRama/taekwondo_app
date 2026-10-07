@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../services/class_schedule.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_page.dart';
 
 /// Lets the owner mark the weekdays classes run on, such as Monday, Wednesday
 /// and Friday.
@@ -116,78 +118,33 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(
-            child: _loaded
-                ? ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      _card(),
-                      const SizedBox(height: 16),
-                      _cancelledCard(),
-                    ],
-                  )
-                : const Center(child: CircularProgressIndicator()),
-          ),
-        ],
-      ),
-      bottomNavigationBar: _buildSaveBar(),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 16, 12),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(_cancelledChanged),
-              ),
-              const SizedBox(width: 4),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Class days',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      'Weekdays and cancelled training',
-                      style: TextStyle(color: Color(0xFFD1D5DB), fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+    return AppPage(
+      title: 'Class days',
+      subtitle: 'Weekdays and cancelled training',
+      onBack: () => Navigator.of(context).pop(_cancelledChanged),
+      bottom: _buildSaveBar(),
+      child: _loaded
+          ? ListView(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+              children: [
+                _card(),
+                const SizedBox(height: 16),
+                _cancelledCard(),
+              ],
+            )
+          : const Center(child: CircularProgressIndicator()),
     );
   }
 
   Widget _card() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        color: AppDark.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDark.border),
+        boxShadow: AppDark.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -252,11 +209,12 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        color: AppDark.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppDark.border),
+        boxShadow: AppDark.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -486,22 +444,12 @@ class _ClassDaysScreenState extends State<ClassDaysScreen> {
   }
 
   Widget _buildSaveBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            child: FilledButton(
-              onPressed: _loaded && !_saving ? _save : null,
-              child: const Text('Save'),
-            ),
-          ),
+    return AppActionBar(
+      child: SizedBox(
+        width: double.infinity,
+        child: FilledButton(
+          onPressed: _loaded && !_saving ? _save : null,
+          child: const Text('Save'),
         ),
       ),
     );

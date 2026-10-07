@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../services/student_storage.dart';
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_page.dart';
 import '../widgets/empty_state_card.dart';
 import '../widgets/student_avatar.dart';
 
@@ -58,9 +59,7 @@ class _TrashScreenState extends State<TrashScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-      );
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _removeFromList(int id) {
@@ -105,7 +104,7 @@ class _TrashScreenState extends State<TrashScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            style: TextButton.styleFrom(foregroundColor: AppColors.red),
+            style: TextButton.styleFrom(foregroundColor: AppDark.crimson),
             onPressed: () => Navigator.of(dialogContext).pop(true),
             child: const Text('Delete Permanently'),
           ),
@@ -160,95 +159,49 @@ class _TrashScreenState extends State<TrashScreen> {
   @override
   Widget build(BuildContext context) {
     final count = _items.length;
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+    return AppPage(
+      title: 'Trash',
+      subtitle: '$count student${count == 1 ? '' : 's'}',
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
         children: [
-          _header(),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                const Text(
-                  'Trash',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$count student${count == 1 ? '' : 's'}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
-                ),
-                const SizedBox(height: 12),
-                const NoticeCard(
-                  icon: Icons.info_outline,
-                  message:
-                      'Deleted students are kept here with their profile '
-                      'picture, promotion record and achievements. Restore '
-                      'brings them back to TKD Records; Delete Permanently '
-                      'removes them for good.',
-                ),
-                const SizedBox(height: 16),
-                if (_loading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 48),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else if (_failed)
-                  const EmptyStateCard(
-                    icon: Icons.error_outline,
-                    title: 'Could not load the Trash',
-                    message: 'Please go back and try again.',
-                  )
-                else if (_items.isEmpty)
-                  const EmptyStateCard(
-                    icon: Icons.delete_outline,
-                    title: 'Trash is empty',
-                    message:
-                        'Students you delete are kept here, so they can be '
-                        'restored if it was a mistake.',
-                  )
-                else
-                  for (final item in _items)
-                    _TrashCard(
-                      item: item,
-                      busy: _busy.contains(item.student.id),
-                      onRestore: () => _restore(item),
-                      onDeletePermanently: () => _deletePermanently(item),
-                    ),
-              ],
-            ),
+          const NoticeCard(
+            icon: Icons.info_outline,
+            message:
+                'Deleted students are kept here with their profile '
+                'picture, promotion record and achievements. Restore '
+                'brings them back to TKD Records; Delete Permanently '
+                'removes them for good.',
           ),
+          const SizedBox(height: 16),
+          if (_loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (_failed)
+            const EmptyStateCard(
+              icon: Icons.error_outline,
+              title: 'Could not load the Trash',
+              message: 'Please go back and try again.',
+            )
+          else if (_items.isEmpty)
+            const EmptyStateCard(
+              icon: Icons.delete_outline,
+              title: 'Trash is empty',
+              message:
+                  'Students you delete are kept here, so they can be '
+                  'restored if it was a mistake.',
+            )
+          else
+            for (final item in _items)
+              _TrashCard(
+                item: item,
+                busy: _busy.contains(item.student.id),
+                onRestore: () => _restore(item),
+                onDeletePermanently: () => _deletePermanently(item),
+              ),
         ],
-      ),
-    );
-  }
-
-  Widget _header() {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-              ),
-              const SizedBox(width: 4),
-              const Text(
-                'Trash',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -290,14 +243,10 @@ class _TrashCard extends StatelessWidget {
             ? '1 achievement'
             : '${item.achievementCount} achievements',
     ];
-    return Container(
+    return DarkCard(
       margin: const EdgeInsets.only(bottom: 12),
+      accent: AppDark.crimson,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -306,9 +255,11 @@ class _TrashCard extends StatelessWidget {
             children: [
               StudentAvatar(
                 student: student,
-                size: 52,
-                borderRadius: 14,
-                initialsFontSize: 16,
+                size: 56,
+                borderRadius: 16,
+                initialsFontSize: 17,
+                backgroundColor: AppDark.surfaceHigh,
+                initialsColor: AppDark.rose,
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -321,8 +272,8 @@ class _TrashCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.black,
+                        fontWeight: FontWeight.w800,
+                        color: AppDark.textPrimary,
                       ),
                     ),
                     if (student.nickname.isNotEmpty) ...[
@@ -333,7 +284,7 @@ class _TrashCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 13,
-                          color: AppColors.muted,
+                          color: AppDark.textSecondary,
                         ),
                       ),
                     ],
@@ -356,7 +307,10 @@ class _TrashCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Kept with this student: ${kept.join(' \u00B7 ')}',
-              style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppDark.textSecondary,
+              ),
             ),
           ],
           const SizedBox(height: 14),
@@ -367,13 +321,10 @@ class _TrashCard extends StatelessWidget {
                 child: FilledButton(
                   onPressed: busy ? null : onRestore,
                   style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 40),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                    minimumSize: const Size(0, 44),
                     textStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   child: const Text('Restore'),
@@ -385,16 +336,15 @@ class _TrashCard extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: busy ? null : onDeletePermanently,
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 40),
-                    foregroundColor: AppColors.red,
-                    side: const BorderSide(color: AppColors.red),
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                    minimumSize: const Size(0, 44),
+                    foregroundColor: AppDark.rose,
+                    side: BorderSide(
+                      color: AppDark.crimson.withValues(alpha: 0.6),
                     ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
                     textStyle: const TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                   child: const Text(

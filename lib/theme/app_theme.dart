@@ -1,42 +1,208 @@
 import 'package:flutter/material.dart';
 
-/// Colour palette for the TKD Records app (black / white / red).
+import 'app_dark.dart';
+
+/// The colour names the pages were written with, now pointing at the dark
+/// palette so every page draws from the same one.
+///
+/// `black` is the "ink" colour (primary text and icons): it is white on the
+/// dark pages, which is why it must never be used as a background. Backgrounds
+/// come from [AppDark] directly.
 class AppColors {
   const AppColors._();
 
-  static const Color black = Color(0xFF111111);
-  static const Color red = Color(0xFFDC2626);
-  static const Color redTint = Color(0xFFFDECEC);
-  static const Color background = Color(0xFFF5F5F5);
-  static const Color surface = Colors.white;
-  static const Color border = Color(0xFFE5E5E5);
-  static const Color muted = Color(0xFF6B7280);
-  static const Color iconCircle = Color(0xFFEBEBEB);
+  /// Primary text and icons (white on the dark pages).
+  static const Color black = AppDark.textPrimary;
+  static const Color red = AppDark.crimson;
+
+  /// A dark wash of the accent, for soft highlights on a dark surface.
+  static const Color redTint = Color(0xFF3A1824);
+  static const Color background = AppDark.background;
+  static const Color surface = AppDark.surface;
+  static const Color border = AppDark.border;
+  static const Color muted = AppDark.textSecondary;
+  static const Color iconCircle = AppDark.surfaceHigh;
 
   /// Training cancelled: neither present nor absent.
   static const Color cancelled = Color(0xFFEAB308);
   static const Color onCancelled = Color(0xFF713F12);
 }
 
+/// The one theme of the app: the dark navy surfaces with the crimson accent,
+/// applied to buttons, dialogs, sheets, menus, snack bars, pickers and the
+/// other controls, so a control that no page styles by hand still matches.
 ThemeData buildAppTheme() {
-  final colorScheme = ColorScheme.fromSeed(seedColor: AppColors.red).copyWith(
-    primary: AppColors.black,
+  const scheme = ColorScheme(
+    brightness: Brightness.dark,
+    primary: AppDark.crimson,
     onPrimary: Colors.white,
-    surface: AppColors.surface,
+    secondary: AppDark.rose,
+    onSecondary: Color(0xFF3A1824),
+    error: Color(0xFFFF6B7F),
+    onError: Colors.white,
+    surface: AppDark.surface,
+    onSurface: AppDark.textPrimary,
+    onSurfaceVariant: AppDark.textSecondary,
+    outline: AppDark.border,
+    outlineVariant: AppDark.border,
+    primaryContainer: Color(0xFF3A1824),
+    onPrimaryContainer: AppDark.rose,
+    secondaryContainer: Color(0xFF3A1824),
+    onSecondaryContainer: AppDark.rose,
+    surfaceContainerHighest: AppDark.surfaceHigh,
+    surfaceContainerHigh: AppDark.surfaceHigh,
+    surfaceContainer: AppDark.surface,
+    surfaceContainerLow: AppDark.surface,
+    surfaceContainerLowest: AppDark.background,
+    surfaceTint: Colors.transparent,
+    shadow: Colors.black,
+    scrim: Colors.black,
+  );
+
+  final base = ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.dark,
+    colorScheme: scheme,
+  );
+
+  final shape14 = RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(14),
   );
 
   return ThemeData(
     useMaterial3: true,
-    colorScheme: colorScheme,
-    scaffoldBackgroundColor: AppColors.background,
+    brightness: Brightness.dark,
+    colorScheme: scheme,
+    scaffoldBackgroundColor: AppDark.background,
+    canvasColor: AppDark.surface,
+    textTheme: base.textTheme.apply(
+      bodyColor: AppDark.textPrimary,
+      displayColor: AppDark.textPrimary,
+    ),
+    iconTheme: const IconThemeData(color: AppDark.icon),
+    dividerTheme: const DividerThemeData(
+      color: AppDark.border,
+      thickness: 1,
+      space: 1,
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: AppDark.crimson,
+      linearTrackColor: AppDark.border,
+    ),
+    textSelectionTheme: TextSelectionThemeData(
+      cursorColor: AppDark.crimson,
+      selectionColor: AppDark.crimson.withValues(alpha: 0.35),
+      selectionHandleColor: AppDark.crimson,
+    ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.black,
+        backgroundColor: AppDark.crimson,
         foregroundColor: Colors.white,
-        minimumSize: const Size(0, 44),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        disabledBackgroundColor: AppDark.surfaceHigh,
+        disabledForegroundColor: AppDark.textSecondary,
+        minimumSize: const Size(0, 48),
+        shape: shape14,
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
       ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppDark.textPrimary,
+        disabledForegroundColor: AppDark.textSecondary,
+        side: const BorderSide(color: AppDark.border),
+        minimumSize: const Size(0, 48),
+        shape: shape14,
+        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      ),
+    ),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
+        foregroundColor: AppDark.rose,
+        minimumSize: const Size(0, 44),
+        shape: shape14,
+        textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(foregroundColor: AppDark.icon),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: AppDark.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: AppDark.border),
+      ),
+      titleTextStyle: const TextStyle(
+        color: AppDark.textPrimary,
+        fontSize: 18,
+        fontWeight: FontWeight.w700,
+      ),
+      contentTextStyle: const TextStyle(
+        color: AppDark.textSecondary,
+        fontSize: 14,
+        height: 1.4,
+      ),
+    ),
+    bottomSheetTheme: const BottomSheetThemeData(
+      backgroundColor: AppDark.surface,
+      surfaceTintColor: Colors.transparent,
+      showDragHandle: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: AppDark.surfaceHigh,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppDark.border),
+      ),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: AppDark.surfaceHigh,
+      contentTextStyle: const TextStyle(
+        color: AppDark.textPrimary,
+        fontSize: 14,
+      ),
+      actionTextColor: AppDark.rose,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: AppDark.border),
+      ),
+    ),
+    datePickerTheme: DatePickerThemeData(
+      backgroundColor: AppDark.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: const BorderSide(color: AppDark.border),
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: AppDark.surfaceHigh,
+      selectedColor: const Color(0xFF3A1824),
+      checkmarkColor: AppDark.rose,
+      side: const BorderSide(color: AppDark.border),
+      labelStyle: const TextStyle(
+        color: AppDark.textPrimary,
+        fontWeight: FontWeight.w600,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    listTileTheme: const ListTileThemeData(
+      iconColor: AppDark.icon,
+      textColor: AppDark.textPrimary,
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+        color: AppDark.surfaceHigh,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppDark.border),
+      ),
+      textStyle: const TextStyle(color: AppDark.textPrimary, fontSize: 12),
     ),
   );
 }

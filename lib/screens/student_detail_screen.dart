@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/student.dart';
 import '../services/attendance_storage.dart';
+import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
+import '../widgets/app_page.dart';
 import '../widgets/attendance_history_card.dart';
+import '../widgets/empty_state_card.dart';
+import '../widgets/registry_header.dart';
 import '../widgets/student_avatar.dart';
 import 'add_student_screen.dart';
 import 'student_attendance_calendar_screen.dart';
@@ -88,173 +92,133 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+    return AppPage(
+      title: student.name.isEmpty ? 'Unnamed student' : student.name,
+      subtitle: student.cellphoneNo.isEmpty
+          ? 'Student record'
+          : student.cellphoneNo,
+      actions: [
+        HeaderIconButton(
+          icon: Icons.qr_code_2,
+          tooltip: 'QR code',
+          onPressed: () => _showQr(context),
+        ),
+        HeaderIconButton(
+          icon: Icons.calendar_month_outlined,
+          tooltip: 'Attendance calendar',
+          onPressed: student.id == null ? null : () => _showCalendar(context),
+        ),
+        HeaderIconButton(
+          icon: Icons.edit_outlined,
+          tooltip: 'Edit',
+          onPressed: () => _edit(context),
+        ),
+      ],
+      bottom: _buildDeleteBar(context),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
         children: [
-          _buildHeader(context),
+          _hero(),
+          const SizedBox(height: 16),
+          if (student.id != null) ...[
+            AttendanceHistoryCard(
+              key: ValueKey(_attendanceStamp),
+              studentId: student.id!,
+              studentName: student.name,
+            ),
+            const SizedBox(height: 16),
+          ],
+          _sectionCard('STUDENT DETAILS', [
+            ('Nickname', student.nickname),
+            ('Birth Date', student.birthDate),
+            ('Sex', student.sex),
+            ('Religion', student.religion),
+            ('Status', student.status),
+            ('Cellphone No.', student.cellphoneNo),
+            ('Telephone No.', student.telephoneNos),
+            ('Email', student.email),
+            ('Home Address', student.homeAddress),
+            ('School Name', student.schoolName),
+            ('Grade / Year / Course', student.gradeYearCourse),
+            ('Company & Office Address', student.companyNameAddress),
+          ]),
+          const SizedBox(height: 16),
+          _sectionCard('PARENTS / GUARDIAN', [
+            ("Father's Name", student.fatherName),
+            ("Father's Occupation", student.fatherOccupation),
+            ("Father's Office Address", student.fatherOfficeAddress),
+            ("Father's Contact Nos.", student.fatherContactNos),
+            ("Mother's Name", student.motherName),
+            ("Mother's Occupation", student.motherOccupation),
+            ("Mother's Office Address", student.motherOfficeAddress),
+            ("Mother's Contact Nos.", student.motherContactNos),
+            ("Guardian's Name", student.guardianName),
+            ("Guardian's Contact Nos.", student.guardianContactNos),
+          ]),
+          const SizedBox(height: 16),
+          _sectionCard('ADDITIONAL QUESTIONS', [
+            ('Previous martial arts training', student.previousMartialArts),
+            ('Other hobbies & sports', student.otherHobbiesSports),
+            ('Health conditions', student.healthConditions),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  /// The top of the page: the student's picture, large, beside the registry
+  /// number. The name is already in the header, so it is not repeated here.
+  Widget _hero() {
+    return DarkCard(
+      accent: AppDark.crimson,
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          StudentAvatar(
+            student: student,
+            size: 76,
+            borderRadius: 22,
+            initialsFontSize: 26,
+            backgroundColor: AppDark.surfaceHigh,
+            initialsColor: AppDark.rose,
+          ),
+          const SizedBox(width: 16),
           Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                if (student.id != null) ...[
-                  AttendanceHistoryCard(
-                    key: ValueKey(_attendanceStamp),
-                    studentId: student.id!,
-                    studentName: student.name,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                _sectionCard('STUDENT DETAILS', [
-                  ('Nickname', student.nickname),
-                  ('Birth Date', student.birthDate),
-                  ('Sex', student.sex),
-                  ('Religion', student.religion),
-                  ('Status', student.status),
-                  ('Cellphone No.', student.cellphoneNo),
-                  ('Telephone No.', student.telephoneNos),
-                  ('Email', student.email),
-                  ('Home Address', student.homeAddress),
-                  ('School Name', student.schoolName),
-                  ('Grade / Year / Course', student.gradeYearCourse),
-                  ('Company & Office Address', student.companyNameAddress),
-                ]),
-                const SizedBox(height: 16),
-                _sectionCard('PARENTS / GUARDIAN', [
-                  ("Father's Name", student.fatherName),
-                  ("Father's Occupation", student.fatherOccupation),
-                  ("Father's Office Address", student.fatherOfficeAddress),
-                  ("Father's Contact Nos.", student.fatherContactNos),
-                  ("Mother's Name", student.motherName),
-                  ("Mother's Occupation", student.motherOccupation),
-                  ("Mother's Office Address", student.motherOfficeAddress),
-                  ("Mother's Contact Nos.", student.motherContactNos),
-                  ("Guardian's Name", student.guardianName),
-                  ("Guardian's Contact Nos.", student.guardianContactNos),
-                ]),
-                const SizedBox(height: 16),
-                _sectionCard('ADDITIONAL QUESTIONS', [
-                  (
-                    'Previous martial arts training',
-                    student.previousMartialArts,
-                  ),
-                  ('Other hobbies & sports', student.otherHobbiesSports),
-                  ('Health conditions', student.healthConditions),
-                ]),
+                const Text(
+                  'Registry number',
+                  style: TextStyle(fontSize: 12, color: AppDark.textSecondary),
+                ),
+                const SizedBox(height: 6),
+                AppChip(
+                  label: student.studentNo.isEmpty
+                      ? 'Not set'
+                      : student.studentNo,
+                  emphasized: true,
+                ),
               ],
             ),
           ),
         ],
       ),
-      bottomNavigationBar: _buildDeleteBar(context),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 8, 16, 12),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => Navigator.of(context).maybePop(),
-              ),
-              StudentAvatar(
-                student: student,
-                size: 40,
-                shape: BoxShape.circle,
-                backgroundColor: AppColors.red,
-                initialsColor: Colors.white,
-                initialsFontSize: 13,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      student.name.isEmpty ? 'Unnamed student' : student.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      student.cellphoneNo.isEmpty
-                          ? 'Student record'
-                          : student.cellphoneNo,
-                      style: const TextStyle(
-                        color: Color(0xFFD1D5DB),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                tooltip: 'QR code',
-                icon: const Icon(Icons.qr_code_2, color: Colors.white),
-                onPressed: () => _showQr(context),
-              ),
-              IconButton(
-                tooltip: 'Attendance calendar',
-                icon: const Icon(
-                  Icons.calendar_month_outlined,
-                  color: Colors.white,
-                ),
-                onPressed: student.id == null
-                    ? null
-                    : () => _showCalendar(context),
-              ),
-              IconButton(
-                tooltip: 'Edit',
-                icon: const Icon(Icons.edit_outlined, color: Colors.white),
-                onPressed: () => _edit(context),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
   Widget _buildDeleteBar(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => _confirmDelete(context),
-              icon: const Icon(Icons.delete_outline, size: 20),
-              label: const Text('Delete Student'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                foregroundColor: AppColors.red,
-                side: const BorderSide(color: AppColors.red),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+    return AppActionBar(
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => _confirmDelete(context),
+          icon: const Icon(Icons.delete_outline, size: 20),
+          label: const Text('Delete Student'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppDark.rose,
+            side: BorderSide(color: AppDark.crimson.withValues(alpha: 0.6)),
+            backgroundColor: AppDark.crimson.withValues(alpha: 0.08),
           ),
         ),
       ),
@@ -262,29 +226,15 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   }
 
   Widget _sectionCard(String title, List<(String, String)> rows) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
-      ),
+    return DarkCard(
+      padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
-              color: AppColors.red,
-            ),
-          ),
-          const SizedBox(height: 8),
+          SectionLabel(title),
+          const SizedBox(height: 10),
           for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) const Divider(height: 16, color: AppColors.border),
+            if (i > 0) const Divider(height: 16, color: AppDark.border),
             _FieldRow(label: rows[i].$1, value: rows[i].$2),
           ],
         ],
@@ -313,7 +263,10 @@ class _FieldRow extends StatelessWidget {
             width: 148,
             child: Text(
               label,
-              style: const TextStyle(fontSize: 13, color: AppColors.muted),
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppDark.textSecondary,
+              ),
             ),
           ),
           Expanded(
@@ -322,7 +275,7 @@ class _FieldRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: hasValue ? AppColors.black : AppColors.muted,
+                color: hasValue ? AppDark.textPrimary : AppDark.textSecondary,
               ),
             ),
           ),

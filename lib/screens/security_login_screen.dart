@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/security_service.dart';
-import '../theme/app_theme.dart';
-import '../widgets/brand_header.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_page.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/registry_header.dart';
 import '../widgets/security_fields.dart';
 
 /// Every launch: the owner enters the security password before the registry
@@ -102,98 +104,114 @@ class _SecurityLoginScreenState extends State<SecurityLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
-        children: [
-          const BrandHeader(),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-              children: [
-                const Text(
-                  'Security Login',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                const Text(
-                  'Enter the password to open the registry',
-                  style: TextStyle(fontSize: 12, color: AppColors.muted),
-                ),
-                const SizedBox(height: 16),
-                if (_error != null)
-                  NoticeCard(icon: Icons.error_outline, message: _error!),
-                if (_error != null) const SizedBox(height: 4),
-                Form(
-                  key: _formKey,
-                  child: SectionCard(
-                    icon: Icons.lock_outline,
-                    title: 'Security Password',
-                    subtitle: 'Locks the registry on this device',
-                    showDivider: false,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: SecurityTextField(
-                        controller: _password,
-                        label: 'Password',
-                        hint: 'Enter password',
-                        obscured: true,
-                        autofocus: true,
-                        textInputAction: TextInputAction.done,
-                        validator: (value) => (value == null || value.isEmpty)
-                            ? 'Password is required'
-                            : null,
-                        onFieldSubmitted: (_) => _submit(),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: AppDark.navBar,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: AppDark.headerBottom,
+        body: Column(
+          children: [
+            // The logo header, the same one the registry opens with.
+            const RegistryHeader(),
+            Expanded(
+              child: AppSheet(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+                  children: [
+                    const PageIntro(
+                      title: 'Security Login',
+                      subtitle: 'Enter the password to open the registry',
+                    ),
+                    const SizedBox(height: 20),
+                    if (_error != null) ...[
+                      NoticeCard(icon: Icons.error_outline, message: _error!),
+                      const SizedBox(height: 14),
+                    ],
+                    Form(
+                      key: _formKey,
+                      child: DarkCard(
+                        accent: AppDark.crimson,
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                IconPlate(icon: Icons.lock_outline),
+                                SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Security Password',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppDark.textPrimary,
+                                        ),
+                                      ),
+                                      SizedBox(height: 2),
+                                      Text(
+                                        'Locks the registry on this device',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: AppDark.textSecondary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 18),
+                            SecurityTextField(
+                              controller: _password,
+                              label: 'Password',
+                              hint: 'Enter password',
+                              obscured: true,
+                              autofocus: true,
+                              textInputAction: TextInputAction.done,
+                              validator: (value) =>
+                                  (value == null || value.isEmpty)
+                                  ? 'Password is required'
+                                  : null,
+                              onFieldSubmitted: (_) => _submit(),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 16),
+                    const NoticeCard(
+                      icon: Icons.wifi_off_outlined,
+                      message:
+                          'Checked on this device only. No internet is needed, '
+                          'nothing is sent anywhere, and the password is never '
+                          'stored as you typed it. It locks the app — keep your '
+                          'phone lock screen on too, since that is what guards '
+                          'the saved file.',
+                    ),
+                  ],
                 ),
-                const NoticeCard(
-                  icon: Icons.wifi_off_outlined,
-                  message:
-                      'Checked on this device only. No internet is needed, '
-                      'nothing is sent anywhere, and the password is never '
-                      'stored as you typed it. It locks the app — keep your '
-                      'phone lock screen on too, since that is what guards the '
-                      'saved file.',
-                ),
-              ],
+              ),
             ),
-          ),
-          _actions(),
-        ],
-      ),
-    );
-  }
-
-  Widget _actions() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        border: Border(top: BorderSide(color: AppColors.border)),
-      ),
-      child: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: _busy ? null : _submit,
-              icon: _busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.login_outlined, size: 18),
-              label: Text(_busy ? 'Checking…' : 'Log In'),
+            AppActionBar(
+              child: CrimsonButton(
+                label: _busy ? 'Checking…' : 'Log In',
+                icon: Icons.login_outlined,
+                busy: _busy,
+                expand: true,
+                onPressed: _busy ? null : _submit,
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

@@ -1,50 +1,16 @@
 import 'package:flutter/material.dart';
 
-import '../theme/app_theme.dart';
+import '../theme/app_dark.dart';
+import 'app_input.dart';
 
-/// The input decoration every security screen uses, matching the other forms in
-/// the app: white field, thin grey border, black when it is focused, red when
-/// it holds a message, 10px corners.
-InputDecoration securityDecoration({String? hint, Widget? suffixIcon}) {
-  OutlineInputBorder border() => OutlineInputBorder(
-    borderRadius: BorderRadius.circular(10),
-    borderSide: const BorderSide(color: AppColors.border),
-  );
+/// The input decoration every security screen uses: the same dark box as every
+/// other field in the app, with a quiet border that turns crimson when focused
+/// and a soft red when it holds a message.
+InputDecoration securityDecoration({String? hint, Widget? suffixIcon}) =>
+    AppInput.decoration(hint: hint, suffixIcon: suffixIcon);
 
-  return InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(color: AppColors.muted, fontSize: 13),
-    filled: true,
-    fillColor: Colors.white,
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: border(),
-    enabledBorder: border(),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.black, width: 1.5),
-    ),
-    errorBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(10),
-      borderSide: const BorderSide(color: AppColors.red),
-    ),
-    suffixIcon: suffixIcon,
-  );
-}
-
-/// A label above an input, in the style the information sheet and the promotion
-/// form already use.
-Widget securityLabel(String label) => Padding(
-  padding: const EdgeInsets.only(left: 2, bottom: 6),
-  child: Text(
-    label,
-    style: const TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w600,
-      color: AppColors.muted,
-    ),
-  ),
-);
+/// A label above an input, the same as on the information sheet.
+Widget securityLabel(String label) => AppInput.label(label);
 
 /// One input of a security screen. [obscured] turns on the show/hide eye, so a
 /// password can be checked as it is typed without leaving it on the screen.
@@ -112,8 +78,13 @@ class _SecurityTextFieldState extends State<SecurityTextField> {
           obscuringCharacter: '•',
           autocorrect: false,
           enableSuggestions: !widget.obscured,
-          decoration: securityDecoration(
+          cursorColor: AppDark.crimson,
+          style: const TextStyle(color: AppDark.textPrimary, fontSize: 15),
+          decoration: AppInput.decoration(
             hint: widget.hint,
+            prefixIcon: widget.icon == null
+                ? null
+                : Icon(widget.icon, size: 20),
             suffixIcon: widget.obscured
                 ? IconButton(
                     tooltip: _visible ? 'Hide password' : 'Show password',
@@ -122,13 +93,11 @@ class _SecurityTextFieldState extends State<SecurityTextField> {
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
                       size: 20,
-                      color: AppColors.muted,
+                      color: AppDark.textSecondary,
                     ),
                     onPressed: () => setState(() => _visible = !_visible),
                   )
-                : (widget.icon == null
-                      ? null
-                      : Icon(widget.icon, size: 20, color: AppColors.black)),
+                : null,
           ),
         ),
       ],

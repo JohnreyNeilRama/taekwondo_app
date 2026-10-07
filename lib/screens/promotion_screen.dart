@@ -5,9 +5,10 @@ import '../models/promotion_record.dart';
 import '../models/student.dart';
 import '../services/promotion_storage.dart';
 import '../services/student_storage.dart';
-import '../theme/app_theme.dart';
-import '../widgets/brand_header.dart';
+import '../theme/app_dark.dart';
+import '../widgets/app_page.dart';
 import '../widgets/empty_state_card.dart';
+import '../widgets/registry_header.dart';
 import '../widgets/search_field.dart';
 import '../widgets/student_avatar.dart';
 import 'promotion_detail_screen.dart';
@@ -238,90 +239,106 @@ class _PromotionScreenState extends State<PromotionScreen> {
   Widget build(BuildContext context) {
     final results = _results;
     final rows = _loading ? const <_PromoRow>[] : _flattenRows(results);
+    final hasQuery = _query.trim().isNotEmpty;
     return Column(
       children: [
-        const BrandHeader(),
+        const RegistryHeader(),
         Expanded(
-          child: CustomScrollView(
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Promotion Test Record',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
+          child: AppSheet(
+            child: CustomScrollView(
+              slivers: [
+                // What this page is, and its main action: record a belt for
+                // the students still waiting for one.
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                    child: PageIntro(
+                      title: 'Promotion Test Record',
+                      subtitle: _loading ? null : _introSubtitle(),
+                      trailing: _loading ? null : _pendingButton(),
+                    ),
+                  ),
+                ),
+                // The Quick Cards always sit above the search box, so all six
+                // belt colours stay visible even with no students and no
+                // promotion records yet.
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: _beltSummary(),
+                  ),
+                ),
+                if (!_loading)
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: PinnedBarDelegate(child: _searchField()),
+                  ),
+                if (_loading)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 48),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  )
+                else if (results.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                      child: EmptyStateCard(
+                        icon: Icons.emoji_events_outlined,
+                        title: !hasQuery
+                            ? 'No promotion records yet'
+                            : 'No matching students',
+                        message: hasQuery
+                            ? 'Try a different name or nickname.'
+                            : (_students.isEmpty
+                                  ? 'Add a student on the Students page first, '
+                                        'then record their belt here.'
+                                  : 'Select a student from your registry to '
+                                        'record their current belt and last '
+                                        'promotion date.'),
+                        actionLabel: !hasQuery ? 'Pending' : null,
+                        onAction: _assignPendingBelt,
                       ),
-                      const SizedBox(height: 16),
-                      // The Quick Cards always sit above the search box and
-                      // the Pending button, so all six belt colours stay
-                      // visible even with no students and no promotion
-                      // records yet.
-                      _beltSummary(),
-                      const SizedBox(height: 16),
-                      if (_loading)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 48),
-                          child: Center(child: CircularProgressIndicator()),
-                        )
-                      else ...[
-                        _searchAndPendingRow(),
-                        const SizedBox(height: 16),
-                        if (results.isEmpty)
-                          EmptyStateCard(
-                            icon: Icons.emoji_events_outlined,
-                            title: _query.trim().isEmpty
-                                ? 'No promotion records yet'
-                                : 'No matching students',
-                            message: _query.trim().isNotEmpty
-                                ? 'Try a different name or nickname.'
-                                : (_students.isEmpty
-                                      ? 'Add a student on the Students page first, '
-                                            'then record their belt here.'
-                                      : 'Select a student from your registry to record '
-                                            'their current belt and last promotion date.'),
-                            actionLabel: _query.trim().isEmpty
-                                ? 'Pending'
-                                : null,
-                            onAction: _assignPendingBelt,
-                          ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              if (!_loading && results.isNotEmpty)
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final row = rows[index];
-                      final heading = row.heading;
-                      if (heading != null) {
-                        return _GroupHeading(
-                          heading: heading,
-                          count: row.count,
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                    sliver: SliverList(
+                      delegate: SliverChildBuilderDelegate((context, index) {
+                        final row = rows[index];
+                        final heading = row.heading;
+                        if (heading != null) {
+                          return _GroupHeading(
+                            heading: heading,
+                            count: row.count,
+                          );
+                        }
+                        final record = row.record!;
+                        return _RecordCard(
+                          record: record,
+                          student: _studentFor(record.studentId),
+                          onTap: () => _openRecord(record),
                         );
-                      }
-                      final record = row.record!;
-                      return _RecordCard(
-                        record: record,
-                        student: _studentFor(record.studentId),
-                        onTap: () => _openRecord(record),
-                      );
-                    }, childCount: rows.length),
+                      }, childCount: rows.length),
+                    ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ],
     );
+  }
+
+  /// The line under the page title: how many records are saved and how many
+  /// students are still waiting for a belt.
+  String _introSubtitle() {
+    final saved = _records.length;
+    final waiting = _pendingStudents.length;
+    final savedText = '$saved record${saved == 1 ? '' : 's'}';
+    return waiting == 0 ? savedText : '$savedText \u00B7 $waiting waiting';
   }
 
   /// Records matching the current search, in the order the belts progress.
@@ -365,24 +382,29 @@ class _PromotionScreenState extends State<PromotionScreen> {
   /// Belts". A colour nobody holds yet simply reads 0.
   Widget _beltSummary() {
     final belts = [for (final record in _records) record.belt];
-    return SizedBox(
-      // Tall enough for a two-line family label plus the count, so the cards
-      // never overflow on narrow phones.
-      height: 88,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: BeltCatalog.groups.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final group = BeltCatalog.groups[index];
-          return _BeltTile(
-            label: group.label,
-            count: group.countIn(belts),
-            color: Color(group.colorValue),
-            onTap: () => _openBeltGroup(group),
-          );
-        },
+    return GridView.builder(
+      // The grid is part of the page's own scroll, not a scroll of its own.
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: EdgeInsets.zero,
+      itemCount: BeltCatalog.groups.length,
+      // Three cards across on a phone, two on a very narrow one, more on a
+      // wide screen; every card keeps the same height.
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 160,
+        mainAxisExtent: 88,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
       ),
+      itemBuilder: (context, index) {
+        final group = BeltCatalog.groups[index];
+        return _BeltTile(
+          label: group.label,
+          count: group.countIn(belts),
+          color: Color(group.colorValue),
+          onTap: () => _openBeltGroup(group),
+        );
+      },
     );
   }
 
@@ -408,35 +430,34 @@ class _PromotionScreenState extends State<PromotionScreen> {
     );
   }
 
-  /// Search field and the Pending button on a single row.
-  Widget _searchAndPendingRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: AppSearchField(
-            controller: _searchController,
-            hintText: 'Search name, nickname...',
-            onChanged: (value) => setState(() => _query = value),
-            hasQuery: _query.isNotEmpty,
-            onClear: () {
-              _searchController.clear();
-              setState(() => _query = '');
-            },
-          ),
-        ),
-        const SizedBox(width: 10),
-        FilledButton.icon(
-          onPressed: _assignPendingBelt,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 44),
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-          ),
-          icon: const Icon(Icons.pending_actions, size: 18),
-          // The count is how many students are waiting for a belt, so the
-          // button reads as the Pending list it opens.
-          label: Text('Pending (${_pendingStudents.length})'),
-        ),
-      ],
+  /// The search card, pinned under the Quick Cards while the list scrolls.
+  Widget _searchField() {
+    return AppSearchField(
+      controller: _searchController,
+      hintText: 'Search name, nickname...',
+      onChanged: (value) => setState(() => _query = value),
+      hasQuery: _query.isNotEmpty,
+      onClear: () {
+        _searchController.clear();
+        setState(() => _query = '');
+      },
+    );
+  }
+
+  /// The Pending button: how many students are waiting for a belt, and the way
+  /// to give them one. Beside the page title when the width allows, underneath
+  /// and full width when it does not.
+  Widget _pendingButton() {
+    return FilledButton.icon(
+      onPressed: _assignPendingBelt,
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+      ),
+      icon: const Icon(Icons.pending_actions, size: 20),
+      // The count is how many students are waiting for a belt, so the button
+      // reads as the Pending list it opens.
+      label: Text('Pending (${_pendingStudents.length})'),
     );
   }
 }
@@ -471,6 +492,20 @@ List<({String heading, List<PromotionRecord> records})> _groupByGrade(
   return groups;
 }
 
+/// The colour of the belt family a grade belongs to, or null for a grade that
+/// is not in the curriculum.
+Color? _beltColorOf(String belt) {
+  for (final group in BeltCatalog.groups) {
+    if (group.contains(belt)) return Color(group.colorValue);
+  }
+  return null;
+}
+
+/// A belt colour made visible on the dark page: a black belt would vanish into
+/// the navy, so very dark colours are lifted to a light gray.
+Color _visibleOnDark(Color color) =>
+    color.computeLuminance() < 0.08 ? const Color(0xFF8FA0BA) : color;
+
 /// One row of the promotion list: either a belt-group heading or a single
 /// record. Flattening both into one list ([_PromotionScreenState._flattenRows])
 /// is what lets the list be built lazily by a plain [SliverChildBuilderDelegate].
@@ -484,7 +519,8 @@ class _PromoRow {
   final PromotionRecord? record;
 }
 
-/// Section heading between belt groups, e.g. "1st Dan Blackbelt".
+/// Section heading between belt groups, e.g. "1st Dan Blackbelt": a small belt
+/// swatch, the grade, and how many records it holds.
 class _GroupHeading extends StatelessWidget {
   const _GroupHeading({required this.heading, required this.count});
 
@@ -493,10 +529,12 @@ class _GroupHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final color = _beltColorOf(heading);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 8, 2, 12),
+      padding: const EdgeInsets.fromLTRB(2, 14, 2, 12),
       child: Row(
         children: [
+          if (color != null) ...[_BeltSwatch(color: color), const SizedBox(width: 10)],
           Expanded(
             child: Text(
               heading,
@@ -505,26 +543,48 @@ class _GroupHeading extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
-                color: AppColors.black,
+                color: AppDark.textPrimary,
               ),
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: AppColors.iconCircle,
+              color: AppDark.surfaceHigh,
               borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: AppDark.border),
             ),
             child: Text(
               '$count',
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 11.5,
                 fontWeight: FontWeight.w700,
-                color: AppColors.muted,
+                color: AppDark.textSecondary,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A small rounded bar in a belt's colour, with a hairline so a white belt
+/// still reads against the dark page.
+class _BeltSwatch extends StatelessWidget {
+  const _BeltSwatch({required this.color});
+
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 26,
+      height: 9,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
       ),
     );
   }
@@ -557,95 +617,45 @@ class _BeltGroupScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Column(
+    return AppPage(
+      title: group.label,
+      subtitle: records.isEmpty
+          ? 'No students yet'
+          : '${records.length} student${records.length == 1 ? '' : 's'}',
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          _header(context),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: [
-                if (records.isEmpty)
-                  const EmptyStateCard(
-                    icon: Icons.emoji_events_outlined,
-                    title: 'No students assigned to this belt yet',
-                    message:
-                        'Record a promotion for a student and they will appear '
-                        'here under this belt.',
-                  )
-                else
-                  for (final section in _groupByGrade(records)) ...[
-                    _GroupHeading(
-                      heading: section.heading,
-                      count: section.records.length,
-                    ),
-                    for (final record in section.records)
-                      _RecordCard(
-                        record: record,
-                        student: studentsById[record.studentId],
-                      ),
-                  ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Dark top bar with a Back button, the colour name and how many students
-  /// hold it, matching the Promotion Details header.
-  Widget _header(BuildContext context) {
-    return Container(
-      color: AppColors.black,
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 8, 16, 16),
-          child: Row(
-            children: [
-              IconButton(
-                tooltip: 'Back',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
+          if (records.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: EmptyStateCard(
+                icon: Icons.emoji_events_outlined,
+                title: 'No students assigned to this belt yet',
+                message:
+                    'Record a promotion for a student and they will appear '
+                    'here under this belt.',
               ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group.label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      records.isEmpty
-                          ? 'No students yet'
-                          : '${records.length} '
-                                'student${records.length == 1 ? '' : 's'}',
-                      style: const TextStyle(
-                        color: Color(0xFFD1D5DB),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
+            )
+          else
+            for (final section in _groupByGrade(records)) ...[
+              _GroupHeading(
+                heading: section.heading,
+                count: section.records.length,
+              ),
+              for (final record in section.records)
+                _RecordCard(
+                  record: record,
+                  student: studentsById[record.studentId],
                 ),
-              ),
             ],
-          ),
-        ),
+        ],
       ),
     );
   }
 }
 
-/// One Quick Card in the belt summary strip: the colour family and how many
-/// students hold it, filled with that belt colour. Tapping it opens the list of
+/// One Quick Card in the belt summary: a swatch of the belt colour, the colour
+/// family, and how many students hold it. Tapping it opens the list of
 /// students holding that colour.
 class _BeltTile extends StatelessWidget {
   const _BeltTile({
@@ -666,51 +676,54 @@ class _BeltTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Very light belts need dark text; dark belts need white text.
-    final isLight = color.computeLuminance() > 0.5;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 104,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          border: isLight ? Border.all(color: AppColors.border) : null,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                height: 1.15,
-                fontWeight: FontWeight.w600,
-                color: isLight ? AppColors.black : Colors.white,
+    return Material(
+      color: AppDark.surface,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: const BorderSide(color: AppDark.border),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        splashColor: _visibleOnDark(color).withValues(alpha: 0.18),
+        highlightColor: _visibleOnDark(color).withValues(alpha: 0.08),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _BeltSwatch(color: color),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppDark.textSecondary,
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: isLight ? AppColors.black : Colors.white,
+              Text(
+                '$count',
+                style: const TextStyle(
+                  fontSize: 24,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                  color: AppDark.textPrimary,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// One promotion record in the list: name, belt and last promotion date.
+/// One promotion record in the list: the picture, the name, the nickname, the
+/// registry number and the last promotion date, with a line down the left edge
+/// in the colour of the belt.
 class _RecordCard extends StatelessWidget {
   const _RecordCard({required this.record, required this.student, this.onTap});
 
@@ -727,21 +740,21 @@ class _RecordCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nickname = student?.nickname ?? '';
-    final card = Container(
+    final beltColor = _beltColorOf(record.belt);
+    return DarkCard(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      accent: beltColor == null ? AppDark.crimson : _visibleOnDark(beltColor),
+      onTap: onTap,
       child: Row(
         children: [
           StudentAvatar(
             student: student,
-            size: 48,
-            borderRadius: 14,
-            initialsFontSize: 15,
+            size: 52,
+            borderRadius: 16,
+            initialsFontSize: 17,
+            backgroundColor: AppDark.surfaceHigh,
+            initialsColor: AppDark.textSecondary,
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -753,9 +766,10 @@ class _RecordCard extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.black,
+                    letterSpacing: -0.2,
+                    color: AppDark.textPrimary,
                   ),
                 ),
                 if (nickname.isNotEmpty) ...[
@@ -765,28 +779,34 @@ class _RecordCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.muted,
+                      fontSize: 12.5,
+                      fontStyle: FontStyle.italic,
+                      color: AppDark.rose,
                     ),
                   ),
                 ],
-                const SizedBox(height: 6),
-                AppChip(label: record.studentNo, emphasized: true),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    AppChip(label: record.studentNo, emphasized: true),
+                    if (record.lastPromotionDate.isNotEmpty)
+                      AppChip(
+                        icon: Icons.event_outlined,
+                        label: record.lastPromotionDate,
+                      ),
+                  ],
+                ),
               ],
             ),
           ),
           // A card with nothing to open (the per-colour list) shows no chevron,
           // so it never looks like it leads somewhere it cannot.
           if (onTap != null)
-            const Icon(Icons.chevron_right, color: AppColors.muted),
+            const Icon(Icons.chevron_right, color: AppDark.textSecondary),
         ],
       ),
-    );
-    if (onTap == null) return card;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: card,
     );
   }
 }
