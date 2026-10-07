@@ -105,12 +105,14 @@ class _SecurityLoginScreenState extends State<SecurityLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
         systemNavigationBarColor: AppDark.navBar,
-        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: AppDark.isLight
+            ? Brightness.dark
+            : Brightness.light,
       ),
       child: Scaffold(
         backgroundColor: AppDark.headerBottom,

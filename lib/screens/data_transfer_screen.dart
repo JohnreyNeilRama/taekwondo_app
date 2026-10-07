@@ -10,21 +10,16 @@ import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_input.dart';
 import '../widgets/app_page.dart';
-import '../widgets/brand_header.dart';
 import '../widgets/empty_state_card.dart';
 
 /// Backup / transfer hub: export the registry to a file and import one back.
 ///
-/// The counts at the top are read from the database, and the file is the whole
-/// registry (students, pictures, promotion records, achievements and
-/// attendance) in one JSON document. Importing only ever adds records; it never
-/// changes or deletes what is already on the device.
+/// Opened from Settings. The counts at the top are read from the database, and
+/// the file is the whole registry (students, pictures, promotion records,
+/// achievements and attendance) in one JSON document. Importing only ever adds
+/// records; it never changes or deletes what is already on the device.
 class DataTransferScreen extends StatefulWidget {
-  const DataTransferScreen({super.key, this.visits = 0});
-
-  /// Bumped by the home shell on every destination change, so the counts are
-  /// re-read each time the owner comes back to this page.
-  final int visits;
+  const DataTransferScreen({super.key});
 
   @override
   State<DataTransferScreen> createState() => _DataTransferScreenState();
@@ -46,12 +41,6 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
   void initState() {
     super.initState();
     _loadCounts();
-  }
-
-  @override
-  void didUpdateWidget(DataTransferScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.visits != widget.visits) _loadCounts();
   }
 
   Future<void> _loadCounts() async {
@@ -267,68 +256,63 @@ class _DataTransferScreenState extends State<DataTransferScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const BrandHeader(),
-        Expanded(
-          child: AppSheet(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-              children: [
-                const PageIntro(
-                  title: 'Import / Export Data',
-                  subtitle: 'Back up your registry or move it to a new device',
-                ),
-                const SizedBox(height: 20),
-                _BackupStatusCard(due: _backupDue, lastExport: _lastExport),
-                const SizedBox(height: 16),
-                _StorageSummary(counts: _counts),
-                const SizedBox(height: 16),
-                _ActionCard(
-                  icon: Icons.file_download_outlined,
-                  title: 'Export data',
-                  message:
-                      'Save a copy of all student records to a file you can '
-                      'keep or move to another device.',
-                  buttonLabel: 'Export backup',
-                  primary: true,
-                  onPressed: _busy ? null : _export,
-                ),
-                _ActionCard(
-                  icon: Icons.file_upload_outlined,
-                  title: 'Import data',
-                  message:
-                      'Load records from a backup file. Imported records are '
-                      'merged with the ones already on this device.',
-                  buttonLabel: 'Import backup',
-                  onPressed: _busy ? null : _import,
-                ),
-                _ActionCard(
-                  icon: Icons.health_and_safety_outlined,
-                  title: 'Check database',
-                  message:
-                      'Checks that the saved file on this device is intact. '
-                      'Worth running now and then, or if the app ever behaves '
-                      'strangely.',
-                  buttonLabel: 'Check now',
-                  buttonIcon: Icons.fact_check_outlined,
-                  onPressed: _busy ? null : _checkDatabase,
-                ),
-                const _TransferredList(),
-                const SizedBox(height: 16),
-                const NoticeCard(
-                  icon: Icons.warning_amber_outlined,
-                  message:
-                      'Importing only adds records: nothing already on this '
-                      'device is changed or deleted. Export often and keep the '
-                      'file somewhere safe, such as your cloud storage or an '
-                      'email to yourself.',
-                ),
-              ],
-            ),
+    return AppPage(
+      title: 'Data',
+      subtitle: 'Backup and transfer',
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+        children: [
+          const PageIntro(
+            title: 'Import / Export Data',
+            subtitle: 'Back up your registry or move it to a new device',
           ),
-        ),
-      ],
+          const SizedBox(height: 20),
+          _BackupStatusCard(due: _backupDue, lastExport: _lastExport),
+          const SizedBox(height: 16),
+          _StorageSummary(counts: _counts),
+          const SizedBox(height: 16),
+          _ActionCard(
+            icon: Icons.file_download_outlined,
+            title: 'Export data',
+            message:
+                'Save a copy of all student records to a file you can '
+                'keep or move to another device.',
+            buttonLabel: 'Export backup',
+            primary: true,
+            onPressed: _busy ? null : _export,
+          ),
+          _ActionCard(
+            icon: Icons.file_upload_outlined,
+            title: 'Import data',
+            message:
+                'Load records from a backup file. Imported records are '
+                'merged with the ones already on this device.',
+            buttonLabel: 'Import backup',
+            onPressed: _busy ? null : _import,
+          ),
+          _ActionCard(
+            icon: Icons.health_and_safety_outlined,
+            title: 'Check database',
+            message:
+                'Checks that the saved file on this device is intact. '
+                'Worth running now and then, or if the app ever behaves '
+                'strangely.',
+            buttonLabel: 'Check now',
+            buttonIcon: Icons.fact_check_outlined,
+            onPressed: _busy ? null : _checkDatabase,
+          ),
+          const _TransferredList(),
+          const SizedBox(height: 16),
+          const NoticeCard(
+            icon: Icons.warning_amber_outlined,
+            message:
+                'Importing only adds records: nothing already on this '
+                'device is changed or deleted. Export often and keep the '
+                'file somewhere safe, such as your cloud storage or an '
+                'email to yourself.',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -568,8 +552,9 @@ class _BackupStatusCard extends StatelessWidget {
   /// When the last backup was saved, or null when there has never been one.
   final DateTime? lastExport;
 
-  /// The green of "everything is backed up".
-  static const Color _ok = Color(0xFF4ADE80);
+  /// The green of "everything is backed up": bright on the dark page, a deep
+  /// green on the light one.
+  static const Color _ok = AppDark.success;
 
   /// "never", "today", "yesterday" or "N days ago".
   static String _ago(DateTime? when, DateTime now) {

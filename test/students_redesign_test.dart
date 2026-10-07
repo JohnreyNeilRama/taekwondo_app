@@ -243,7 +243,7 @@ void main() {
           bottomNavigationBar: AppNavBar(
             selected: selected,
             onSelected: onSelected,
-            showDataBadge: badge,
+            showSettingsBadge: badge,
           ),
         ),
       );
@@ -261,7 +261,7 @@ void main() {
       await tester.tap(find.text('Scan'));
       await tester.tap(find.byIcon(Icons.qr_code_scanner));
       await tester.tap(find.text('Achievement'));
-      await tester.tap(find.text('Data'));
+      await tester.tap(find.text('Settings'));
       expect(taps, [1, 2, 2, 3, 4]);
     });
 
@@ -276,7 +276,7 @@ void main() {
       expect(scanTop, lessThan(studentsTop));
     });
 
-    testWidgets('the red dot shows on Data only while a backup is due', (
+    testWidgets('the red dot shows on Settings only while a backup is due', (
       WidgetTester tester,
     ) async {
       _phone(tester, width: 400);

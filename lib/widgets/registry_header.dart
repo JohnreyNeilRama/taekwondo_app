@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_dark.dart';
 
+/// The header is the dark brand bar in the dark and the light mode alike, so its
+/// text and icons use these fixed light colours instead of the palette's
+/// page-text colours (which turn dark in the light mode).
+const Color _onHeader = Colors.white;
+const Color _onHeaderMuted = Color(0xFF94A3B8);
+
 /// The dark header of every page: a soft crimson glow in the upper-right corner
 /// of a navy gradient, then either the TKD logo (the main pages) or a Back
 /// button (pages opened from another one), the [title] and [subtitle], and
@@ -93,7 +99,7 @@ class RegistryHeader extends StatelessWidget {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            color: AppDark.textPrimary,
+                            color: _onHeader,
                             fontSize: isSubPage ? 19 : 20,
                             fontWeight: FontWeight.w800,
                             letterSpacing: -0.2,
@@ -106,7 +112,7 @@ class RegistryHeader extends StatelessWidget {
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                              color: AppDark.textSecondary,
+                              color: _onHeaderMuted,
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                             ),
@@ -205,8 +211,8 @@ class HeaderIconButton extends StatelessWidget {
             child: Icon(
               icon,
               color: onPressed == null
-                  ? AppDark.textSecondary.withValues(alpha: 0.5)
-                  : (color ?? AppDark.textPrimary),
+                  ? _onHeaderMuted.withValues(alpha: 0.5)
+                  : (color ?? _onHeader),
               size: 22,
             ),
           ),

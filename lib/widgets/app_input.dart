@@ -8,8 +8,9 @@ import '../theme/app_dark.dart';
 class AppInput {
   const AppInput._();
 
-  /// The softer red used for error text and borders, readable on dark.
-  static const Color error = Color(0xFFFF6B7F);
+  /// The softer red used for error text and borders, readable on both the dark
+  /// and the light pages.
+  static const Color error = AppDark.error;
 
   static OutlineInputBorder _border(Color color, [double width = 1]) =>
       OutlineInputBorder(

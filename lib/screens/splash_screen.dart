@@ -5,6 +5,17 @@ import 'package:flutter/services.dart';
 
 import '../theme/app_dark.dart';
 
+/// The loading screen is the brand screen, so it is the same dark navy in the
+/// dark and the light mode alike (the palette's own colours turn light in the
+/// light mode, and this screen is also the first thing drawn, before the saved
+/// mode has been read).
+const Color _bg = Color(0xFF0B1220);
+const Color _plate = Color(0xFF111B2F);
+const Color _line = Color(0xFF26324D);
+const Color _text = Colors.white;
+const Color _muted = Color(0xFF94A3B8);
+const Color _accent = Color(0xFFE5334B);
+
 /// The loading screen shown while the app opens: the app icon on a soft crimson
 /// glow, the app name and a thin line filling up, on the same dark navy as the
 /// rest of the app.
@@ -94,11 +105,11 @@ class _SplashScreenState extends State<SplashScreen>
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
-        systemNavigationBarColor: AppDark.background,
+        systemNavigationBarColor: _bg,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: AppDark.background,
+        backgroundColor: _bg,
         body: Stack(
           fit: StackFit.expand,
           children: [
@@ -132,9 +143,9 @@ class _SplashScreenState extends State<SplashScreen>
                           height: 132,
                           clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
-                            color: AppDark.surface,
+                            color: _plate,
                             borderRadius: BorderRadius.circular(32),
-                            border: Border.all(color: AppDark.border),
+                            border: Border.all(color: _line),
                             boxShadow: AppDark.crimsonGlow,
                           ),
                           // The same picture the phone shows for the app. Falls
@@ -157,7 +168,7 @@ class _SplashScreenState extends State<SplashScreen>
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.3,
-                        color: AppDark.textPrimary,
+                        color: _text,
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -165,7 +176,7 @@ class _SplashScreenState extends State<SplashScreen>
                       'Student Registry',
                       style: TextStyle(
                         fontSize: 14,
-                        color: AppDark.textSecondary,
+                        color: _muted,
                       ),
                     ),
                     const SizedBox(height: 36),
@@ -178,9 +189,9 @@ class _SplashScreenState extends State<SplashScreen>
                           builder: (context, child) => LinearProgressIndicator(
                             value: _controller.value,
                             minHeight: 4,
-                            backgroundColor: AppDark.border,
+                            backgroundColor: _line,
                             valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppDark.crimson,
+                              _accent,
                             ),
                           ),
                         ),

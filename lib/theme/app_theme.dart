@@ -15,8 +15,8 @@ class AppColors {
   static const Color black = AppDark.textPrimary;
   static const Color red = AppDark.crimson;
 
-  /// A dark wash of the accent, for soft highlights on a dark surface.
-  static const Color redTint = Color(0xFF3A1824);
+  /// A wash of the accent, for soft highlights on a surface.
+  static const Color redTint = AppDark.crimsonTint;
   static const Color background = AppDark.background;
   static const Color surface = AppDark.surface;
   static const Color border = AppDark.border;
@@ -28,26 +28,31 @@ class AppColors {
   static const Color onCancelled = Color(0xFF713F12);
 }
 
-/// The one theme of the app: the dark navy surfaces with the crimson accent,
-/// applied to buttons, dialogs, sheets, menus, snack bars, pickers and the
-/// other controls, so a control that no page styles by hand still matches.
+/// The one theme of the app, in the palette that is in use ([AppDark.isLight]):
+/// the navy surfaces or the soft white ones, with the crimson accent, applied to
+/// buttons, dialogs, sheets, menus, snack bars, pickers and the other controls,
+/// so a control that no page styles by hand still matches.
+///
+/// It reads the palette when it is called, so it is built again when the mode
+/// changes.
 ThemeData buildAppTheme() {
-  const scheme = ColorScheme(
-    brightness: Brightness.dark,
+  final brightness = AppDark.isLight ? Brightness.light : Brightness.dark;
+  final scheme = ColorScheme(
+    brightness: brightness,
     primary: AppDark.crimson,
     onPrimary: Colors.white,
     secondary: AppDark.rose,
-    onSecondary: Color(0xFF3A1824),
-    error: Color(0xFFFF6B7F),
+    onSecondary: AppDark.crimsonTint,
+    error: AppDark.error,
     onError: Colors.white,
     surface: AppDark.surface,
     onSurface: AppDark.textPrimary,
     onSurfaceVariant: AppDark.textSecondary,
     outline: AppDark.border,
     outlineVariant: AppDark.border,
-    primaryContainer: Color(0xFF3A1824),
+    primaryContainer: AppDark.crimsonTint,
     onPrimaryContainer: AppDark.rose,
-    secondaryContainer: Color(0xFF3A1824),
+    secondaryContainer: AppDark.crimsonTint,
     onSecondaryContainer: AppDark.rose,
     surfaceContainerHighest: AppDark.surfaceHigh,
     surfaceContainerHigh: AppDark.surfaceHigh,
@@ -61,7 +66,7 @@ ThemeData buildAppTheme() {
 
   final base = ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: brightness,
     colorScheme: scheme,
   );
 
@@ -71,7 +76,7 @@ ThemeData buildAppTheme() {
 
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.dark,
+    brightness: brightness,
     colorScheme: scheme,
     scaffoldBackgroundColor: AppDark.background,
     canvasColor: AppDark.surface,
@@ -183,7 +188,7 @@ ThemeData buildAppTheme() {
     ),
     chipTheme: ChipThemeData(
       backgroundColor: AppDark.surfaceHigh,
-      selectedColor: const Color(0xFF3A1824),
+      selectedColor: AppDark.crimsonTint,
       checkmarkColor: AppDark.rose,
       side: const BorderSide(color: AppDark.border),
       labelStyle: const TextStyle(
@@ -195,6 +200,23 @@ ThemeData buildAppTheme() {
     listTileTheme: const ListTileThemeData(
       iconColor: AppDark.icon,
       textColor: AppDark.textPrimary,
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? Colors.white
+            : AppDark.textSecondary,
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? AppDark.crimson
+            : AppDark.surfaceHigh,
+      ),
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? AppDark.crimson
+            : AppDark.border,
+      ),
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(

@@ -179,13 +179,22 @@ void main() {
     // No students saved yet, so the list explains where to start.
     expect(find.text('No students yet'), findsOneWidget);
 
+    // Settings: Trash, Data and Appearance, each opening its own page.
+    await tester.tap(find.text('Settings').last);
+    await _settle(tester);
+    expect(find.text('Trash'), findsOneWidget);
+    expect(find.text('Data'), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
+
     // Import / Export.
-    await tester.tap(find.text('Data').last);
+    await tester.tap(find.text('Data'));
     await _settle(tester);
     expect(find.text('Import / Export Data'), findsOneWidget);
     // "What gets transferred" is further down the scroll view, so the
     // first visible action card is asserted instead.
     expect(find.text('Export backup'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await _settle(tester);
 
     // Back to the registry.
     await tester.tap(find.text('Students').last);
@@ -476,7 +485,7 @@ void main() {
       );
 
       // Leave the Students tab and come back to it.
-      await tester.tap(find.text('Data').last);
+      await tester.tap(find.text('Settings').last);
       await _settle(tester);
       await tester.tap(find.text('Students').last);
       await _settle(tester);
@@ -577,9 +586,12 @@ void main() {
     await _settle(tester);
     expect(find.text('0 records'), findsOneWidget);
 
-    // The Trash button in the upper-right corner opens the Trash page, where
-    // the student waits with both actions.
-    await tester.tap(find.byTooltip('Trash'));
+    // The Trash is under Settings: its row opens the Trash page, where the
+    // student waits with both actions.
+    await tester.tap(find.text('Settings').last);
+    await _settle(tester);
+    expect(find.text('1 deleted student'), findsOneWidget);
+    await tester.tap(find.text('Trash'));
     await _settle(tester);
     expect(find.text('Nguyen Van A'), findsOneWidget);
     expect(find.text('TKD-0001'), findsOneWidget);
@@ -593,6 +605,9 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await _settle(tester);
 
+    // Back on the Students tab the student is in the list again.
+    await tester.tap(find.text('Students').last);
+    await _settle(tester);
     expect(find.text('A, Nguyen Van'), findsOneWidget);
     expect(find.text('1 record'), findsOneWidget);
     expect(find.text('TKD-0001'), findsNothing);
@@ -618,7 +633,9 @@ void main() {
     await tester.tap(find.text('Delete'));
     await _settle(tester);
 
-    await tester.tap(find.byTooltip('Trash'));
+    await tester.tap(find.text('Settings').last);
+    await _settle(tester);
+    await tester.tap(find.text('Trash'));
     await _settle(tester);
 
     // Cancelling the confirmation keeps the student in the Trash.

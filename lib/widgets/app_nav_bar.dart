@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import '../theme/app_dark.dart';
 
 /// The app's bottom bar: a dark rounded dock with five slots (Students,
-/// Promotion, Scan, Achievement, Data) and the Scan button raised above the
+/// Promotion, Scan, Achievement, Settings) and the Scan button raised above the
 /// middle of it as a red circle with a soft glow.
 ///
 /// Scan is an action, not a page, so it is never the highlighted slot. The
 /// highlighted slot has a crimson icon and label and a short crimson underline.
-/// The Data slot carries a small red dot while a backup is due.
+/// The Settings slot carries a small red dot while a backup is due.
 ///
 /// The bar keeps clear of the system navigation area, and its labels cannot
 /// outgrow their slots whatever the text size is set to.
@@ -17,7 +17,7 @@ class AppNavBar extends StatelessWidget {
     super.key,
     required this.selected,
     required this.onSelected,
-    this.showDataBadge = false,
+    this.showSettingsBadge = false,
   });
 
   /// The slot that is highlighted (never [scanSlot]).
@@ -26,13 +26,13 @@ class AppNavBar extends StatelessWidget {
   /// Called with the slot that was tapped, including [scanSlot].
   final ValueChanged<int> onSelected;
 
-  /// Shows the small red dot on the Data slot.
-  final bool showDataBadge;
+  /// Shows the small red dot on the Settings slot.
+  final bool showSettingsBadge;
 
   /// The middle slot, where the raised Scan button sits.
   static const int scanSlot = 2;
 
-  static const int dataSlot = 4;
+  static const int settingsSlot = 4;
 
   /// The labels of the five slots, left to right.
   static const List<String> labels = [
@@ -40,7 +40,7 @@ class AppNavBar extends StatelessWidget {
     'Promotion',
     'Scan',
     'Achievement',
-    'Data',
+    'Settings',
   ];
 
   static const List<IconData> _icons = [
@@ -48,7 +48,7 @@ class AppNavBar extends StatelessWidget {
     Icons.emoji_events_outlined,
     Icons.qr_code_scanner,
     Icons.workspace_premium_outlined,
-    Icons.swap_horiz_outlined,
+    Icons.settings_outlined,
   ];
 
   static const List<IconData> _activeIcons = [
@@ -56,7 +56,7 @@ class AppNavBar extends StatelessWidget {
     Icons.emoji_events,
     Icons.qr_code_scanner,
     Icons.workspace_premium,
-    Icons.swap_horiz,
+    Icons.settings,
   ];
 
   /// Height of the dock itself, above the system navigation area.
@@ -107,7 +107,7 @@ class AppNavBar extends StatelessWidget {
         border: const Border(top: BorderSide(color: AppDark.border)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.45),
+            color: Colors.black.withValues(alpha: AppDark.isLight ? 0.10 : 0.45),
             blurRadius: 24,
             offset: const Offset(0, -6),
           ),
@@ -126,9 +126,11 @@ class AppNavBar extends StatelessWidget {
                         activeIcon: _activeIcons[slot],
                         label: labels[slot],
                         selected: slot == selected,
-                        // Only the Data slot has a dot to show: null means this
-                        // slot never carries one.
-                        showBadge: slot == dataSlot ? showDataBadge : null,
+                        // Only the Settings slot has a dot to show: null means
+                        // this slot never carries one.
+                        showBadge: slot == settingsSlot
+                            ? showSettingsBadge
+                            : null,
                         onTap: () => onSelected(slot),
                       ),
               ),
@@ -157,7 +159,7 @@ class _NavItem extends StatelessWidget {
   final bool selected;
 
   /// Whether the red dot is shown, or null for a slot that has no dot at all
-  /// (every slot but Data), which then draws no badge widget.
+  /// (every slot but Settings), which then draws no badge widget.
   final bool? showBadge;
   final VoidCallback onTap;
 

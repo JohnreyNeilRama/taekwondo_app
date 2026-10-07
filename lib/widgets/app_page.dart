@@ -61,12 +61,17 @@ class AppPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
+      // Status-bar icons stay light because the header is dark in both modes;
+      // the navigation area follows the bottom bar, so its icons turn dark on
+      // the light bar.
+      value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
         systemNavigationBarColor: AppDark.navBar,
-        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: AppDark.isLight
+            ? Brightness.dark
+            : Brightness.light,
       ),
       child: Scaffold(
         backgroundColor: AppDark.headerBottom,
@@ -102,7 +107,7 @@ class AppActionBar extends StatelessWidget {
         border: const Border(top: BorderSide(color: AppDark.border)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.35),
+            color: Colors.black.withValues(alpha: AppDark.isLight ? 0.08 : 0.35),
             blurRadius: 20,
             offset: const Offset(0, -6),
           ),

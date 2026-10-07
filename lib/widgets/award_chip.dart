@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../models/achievement_record.dart';
+import '../theme/app_dark.dart';
 
 /// Medal chip for one award, washed with the medal colour so Gold, Silver and
-/// Bronze stay readable at a glance on the dark cards.
+/// Bronze stay readable at a glance on the cards, in the dark and the light
+/// mode alike.
 class AwardChip extends StatelessWidget {
   const AwardChip({super.key, required this.award, this.count});
 
@@ -16,6 +18,10 @@ class AwardChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = Color(award.colorValue);
+    // The wash and the border keep the medal's own colour; the text and the
+    // little cup are darkened in the light mode, where gold or silver on white
+    // could not be read.
+    final ink = AppDark.readable(color);
     final label = count == null ? award.label : '${award.label} ×$count';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -27,14 +33,14 @@ class AwardChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.emoji_events, size: 12, color: color),
+          Icon(Icons.emoji_events, size: 12, color: ink),
           const SizedBox(width: 4),
           Text(
             label,
             style: TextStyle(
               fontSize: 11.5,
               fontWeight: FontWeight.w700,
-              color: color,
+              color: ink,
             ),
           ),
         ],

@@ -291,7 +291,9 @@ class _RecordTile extends StatelessWidget {
           IconPlate(
             icon: Icons.emoji_events,
             size: 48,
-            color: medalColor ?? AppDark.textSecondary,
+            color: medalColor == null
+                ? AppDark.textSecondary
+                : AppDark.readable(medalColor),
             background: medal == null
                 ? AppDark.surfaceHigh
                 : medalColor!.withValues(alpha: 0.16),

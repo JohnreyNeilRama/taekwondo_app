@@ -9,7 +9,6 @@ import '../widgets/student_search_bar.dart';
 import 'add_student_screen.dart';
 import 'student_detail_screen.dart';
 import 'student_qr_screen.dart';
-import 'trash_screen.dart';
 
 /// The stored name split for display and sorting: the family name and the
 /// given names.
@@ -524,16 +523,6 @@ class _StudentsScreenState extends State<StudentsScreen> {
     await _loadStudents();
   }
 
-  /// Opens the Trash. Restoring a student there changes the registry, so the
-  /// list is read again when the page is closed.
-  Future<void> _openTrash() async {
-    _dismissUndoBar();
-    await Navigator.of(context)
-        .push<void>(MaterialPageRoute(builder: (_) => const TrashScreen()));
-    if (!mounted) return;
-    if (_seenRevision != StudentStorage.revision) await _loadStudents();
-  }
-
   void _clearSearch() {
     _searchController.clear();
     setState(() => _query = '');
@@ -666,16 +655,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
       onPointerDown: (_) => _dismissUndoBar(),
       child: Column(
         children: [
-          RegistryHeader(
-            // The Trash button sits in the upper-right corner of the page.
-            actions: [
-              HeaderIconButton(
-                icon: Icons.delete_outline,
-                tooltip: 'Trash',
-                onPressed: _openTrash,
-              ),
-            ],
-          ),
+          // The Trash lives under Settings; restoring a student there changes
+          // the registry, and this list reads it again when its tab is next
+          // opened (see [StudentsScreen.visits]).
+          const RegistryHeader(),
           Expanded(
             // The page is a sheet with rounded top corners laid over the
             // header; the colour behind is what shows in the two cut corners.

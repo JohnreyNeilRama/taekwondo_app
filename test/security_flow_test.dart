@@ -261,7 +261,7 @@ void main() {
 
       final bar = find.byType(AppNavBar);
       expect(bar, findsOneWidget);
-      for (final label in ['Students', 'Promotion', 'Scan', 'Achievement', 'Data']) {
+      for (final label in ['Students', 'Promotion', 'Scan', 'Achievement', 'Settings']) {
         expect(
           find.descendant(of: bar, matching: find.text(label)),
           findsOneWidget,
@@ -277,7 +277,7 @@ void main() {
 
       // Every remaining page destination still opens (Scan is left out: it
       // starts the camera, which a test has none of).
-      for (final label in ['Promotion', 'Achievement', 'Data', 'Students']) {
+      for (final label in ['Promotion', 'Achievement', 'Settings', 'Students']) {
         await tester.tap(find.text(label).last);
         await _settle(tester);
         expect(tester.takeException(), isNull);

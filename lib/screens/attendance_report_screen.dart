@@ -335,7 +335,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
           box(
             'Present',
             cancelled ? '-' : '${report.present.length}',
-            const Color(0xFF4ADE80),
+            AppDark.success,
           ),
           const SizedBox(width: 8),
           box(
@@ -370,7 +370,7 @@ class _AttendanceReportScreenState extends State<AttendanceReportScreen> {
         return _StudentTile(
           student: entry.student,
           trailing: _formatTime(entry.checkedInAt),
-          trailingColor: const Color(0xFF4ADE80),
+          trailingColor: AppDark.success,
         );
       },
     );
