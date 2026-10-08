@@ -796,7 +796,6 @@ class _RecordCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    AppChip(label: record.studentNo, emphasized: true),
                     if (record.lastPromotionDate.isNotEmpty)
                       AppChip(
                         icon: Icons.event_outlined,

@@ -156,11 +156,6 @@ class StudentIdCard extends StatelessWidget {
             color: _ink,
           ),
         ),
-        if (student.studentNo.isNotEmpty)
-          Text(
-            'No. ${student.studentNo}',
-            style: const TextStyle(fontSize: 12, color: _quiet),
-          ),
       ],
     );
   }

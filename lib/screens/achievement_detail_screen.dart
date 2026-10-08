@@ -232,8 +232,6 @@ class _AchievementDetailScreenState extends State<AchievementDetailScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: 8),
-                AppChip(label: widget.student.studentNo, emphasized: true),
               ],
             ),
           ),

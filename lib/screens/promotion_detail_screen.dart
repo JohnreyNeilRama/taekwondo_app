@@ -60,10 +60,6 @@ class PromotionDetailScreen extends StatelessWidget {
                     color: AppDark.textPrimary,
                   ),
                 ),
-                if (record.studentNo.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  AppChip(label: record.studentNo, emphasized: true),
-                ],
               ],
             ),
           ),

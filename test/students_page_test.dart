@@ -106,7 +106,7 @@ void main() {
     expect(dela, lessThan(reyes));
   });
 
-  testWidgets('tapping the card opens the details; Edit opens the form', (
+  testWidgets('tapping the card opens the details; Edit (in the menu) opens the form', (
     WidgetTester tester,
   ) async {
     _tallView(tester);
@@ -125,8 +125,10 @@ void main() {
     await tester.tap(find.byTooltip('Back'));
     await _settle(tester);
 
-    // The Edit button opens the edit form, not the details underneath it.
-    await tester.tap(find.byIcon(Icons.edit_outlined));
+    // The Edit action is in the three-dot menu, not on the card itself.
+    await tester.tap(find.byTooltip('More options'));
+    await _settle(tester);
+    await tester.tap(find.text('Edit'));
     await _settle(tester);
     expect(find.text('Save Changes'), findsOneWidget);
     expect(find.text('Delete Student'), findsNothing);

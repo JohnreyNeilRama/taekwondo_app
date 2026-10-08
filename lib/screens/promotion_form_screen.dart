@@ -158,8 +158,6 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
                     color: AppDark.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 6),
-                AppChip(label: widget.student.studentNo, emphasized: true),
               ],
             ),
           ),

@@ -5,7 +5,6 @@ import '../models/student.dart';
 import '../theme/app_dark.dart';
 import '../widgets/app_input.dart';
 import '../widgets/award_chip.dart';
-import '../widgets/empty_state_card.dart';
 import '../widgets/student_avatar.dart';
 import 'student_picker_screen.dart';
 
@@ -238,10 +237,6 @@ class _AchievementFormDialogState extends State<AchievementFormDialog> {
                       : AppDark.textPrimary,
                 ),
               ),
-              if (student != null) ...[
-                const SizedBox(height: 4),
-                AppChip(label: student.studentNo, emphasized: true),
-              ],
             ],
           ),
         ),

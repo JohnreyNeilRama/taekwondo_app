@@ -6,7 +6,6 @@ import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
 import '../widgets/app_page.dart';
 import '../widgets/attendance_history_card.dart';
-import '../widgets/empty_state_card.dart';
 import '../widgets/registry_header.dart';
 import '../widgets/student_avatar.dart';
 import 'add_student_screen.dart';
@@ -33,6 +32,18 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
   /// Bumped when the calendar may have added or removed a check-in, so the
   /// attendance card below reloads.
   int _attendanceStamp = 0;
+
+  /// The sections of the sheet that are open, by title. The student's own
+  /// details open first; the parents' and the extra questions stay hidden until
+  /// the owner asks to see them, and any section can be hidden again with the
+  /// same tap.
+  final Set<String> _openSections = {'STUDENT DETAILS'};
+
+  void _toggleSection(String title) {
+    setState(() {
+      if (!_openSections.add(title)) _openSections.remove(title);
+    });
+  }
 
   Future<void> _confirmDelete(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -166,8 +177,9 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     );
   }
 
-  /// The top of the page: the student's picture, large, beside the registry
-  /// number. The name is already in the header, so it is not repeated here.
+  /// The top of the page: the student's picture, large, beside a short
+  /// profile label (and the nickname, when there is one). The name is already
+  /// in the header, so it is not repeated here.
   Widget _hero() {
     return DarkCard(
       accent: AppDark.crimson,
@@ -189,16 +201,26 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
-                  'Registry number',
-                  style: TextStyle(fontSize: 12, color: AppDark.textSecondary),
+                  'Student profile',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppDark.textPrimary,
+                  ),
                 ),
-                const SizedBox(height: 6),
-                AppChip(
-                  label: student.studentNo.isEmpty
-                      ? 'Not set'
-                      : student.studentNo,
-                  emphasized: true,
-                ),
+                if (student.nickname.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '"${student.nickname}"',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontStyle: FontStyle.italic,
+                      color: AppDark.rose,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -225,18 +247,79 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     );
   }
 
+  /// One section of the sheet. Its title row is a button that shows or hides
+  /// the rows below it. A hidden section builds none of its rows, so nothing in
+  /// it is on screen, read out, or found by a search of the page until it is
+  /// opened.
   Widget _sectionCard(String title, List<(String, String)> rows) {
+    final open = _openSections.contains(title);
     return DarkCard(
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SectionLabel(title),
-          const SizedBox(height: 10),
-          for (var i = 0; i < rows.length; i++) ...[
-            if (i > 0) const Divider(height: 16, color: AppDark.border),
-            _FieldRow(label: rows[i].$1, value: rows[i].$2),
-          ],
+          Semantics(
+            button: true,
+            expanded: open,
+            child: InkWell(
+              onTap: () => _toggleSection(title),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 12, 14),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SectionLabel(title),
+                          if (!open) ...[
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Hidden \u00B7 tap to show',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppDark.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: open ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 28,
+                        color: AppDark.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: open
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (var i = 0; i < rows.length; i++) ...[
+                          if (i > 0)
+                            const Divider(height: 16, color: AppDark.border),
+                          _FieldRow(label: rows[i].$1, value: rows[i].$2),
+                        ],
+                      ],
+                    ),
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
         ],
       ),
     );

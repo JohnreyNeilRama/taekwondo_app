@@ -104,11 +104,13 @@ void main() {
     expect(find.text('1 record'), findsOneWidget);
     expect(find.text('No student records found.'), findsNothing);
 
-    // The card shows the family name first and an Edit button in the corner;
-    // the registry number and the old View button are no longer on the card.
+    // The card shows the family name first and a three-dot menu in the corner
+    // (Edit lives in it); the registry number, the old View button and a
+    // separate Edit button are not on the card.
     expect(find.text('TKD-0001'), findsNothing);
     expect(find.text('View'), findsNothing);
-    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    expect(find.byTooltip('More options'), findsOneWidget);
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
 
     // A search with no match brings the empty state back.
     await tester.enterText(find.byType(TextField), 'Tran');
@@ -179,12 +181,25 @@ void main() {
     // No students saved yet, so the list explains where to start.
     expect(find.text('No students yet'), findsOneWidget);
 
-    // Settings: Trash, Data and Appearance, each opening its own page.
+    // Settings: Trash, Data and Appearance, each opening its own page. The
+    // page lists five rows, so the last ones sit below the visible area of the
+    // default test window and are scrolled to.
     await tester.tap(find.text('Settings').last);
     await _settle(tester);
     expect(find.text('Trash'), findsOneWidget);
     expect(find.text('Data'), findsOneWidget);
+    final settingsList = find.byType(Scrollable).last;
+    await tester.scrollUntilVisible(
+      find.text('Appearance'),
+      100,
+      scrollable: settingsList,
+    );
     expect(find.text('Appearance'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Data'),
+      -100,
+      scrollable: settingsList,
+    );
 
     // Import / Export.
     await tester.tap(find.text('Data'));
@@ -265,7 +280,7 @@ void main() {
     // The student now appears on the Promotion list under their grade
     // heading, and that grade is counted on its colour's Quick Card.
     expect(find.text('Nguyen Van A'), findsOneWidget);
-    expect(find.text('TKD-0001'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsNothing);
     expect(find.text('8th Grade Yellow'), findsOneWidget);
     expect(
       find.descendant(
@@ -368,9 +383,11 @@ void main() {
     await tester.tap(find.text('Save Student'));
     await _settle(tester);
 
-    // The card's Edit button goes straight to a prefilled form -
-    // without the detail screen in between.
-    await tester.tap(find.byTooltip('Edit student'));
+    // The card's menu has an Edit entry that goes straight to a prefilled
+    // form - without the detail screen in between.
+    await tester.tap(find.byTooltip('More options'));
+    await _settle(tester);
+    await tester.tap(find.text('Edit'));
     await _settle(tester);
     expect(find.text('Save Changes'), findsOneWidget);
     final nameField = find.widgetWithText(TextField, 'Enter full name');
@@ -594,7 +611,7 @@ void main() {
     await tester.tap(find.text('Trash'));
     await _settle(tester);
     expect(find.text('Nguyen Van A'), findsOneWidget);
-    expect(find.text('TKD-0001'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsNothing);
     expect(find.text('Restore'), findsOneWidget);
     expect(find.text('Delete Permanently'), findsOneWidget);
 

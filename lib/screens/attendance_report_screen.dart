@@ -504,14 +504,6 @@ class _StudentTile extends StatelessWidget {
                     color: AppColors.black,
                   ),
                 ),
-                if (student.studentNo.isNotEmpty)
-                  Text(
-                    student.studentNo,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.muted,
-                    ),
-                  ),
               ],
             ),
           ),

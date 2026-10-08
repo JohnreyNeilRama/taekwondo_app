@@ -8,21 +8,18 @@ import '../services/attendance_storage.dart';
 import '../services/class_schedule.dart';
 import '../theme/app_dark.dart';
 import '../theme/app_theme.dart';
-import '../widgets/app_input.dart';
 import '../widgets/app_page.dart';
 import '../widgets/registry_header.dart';
 import '../widgets/student_avatar.dart';
 import 'attendance_report_screen.dart';
-import 'class_days_screen.dart';
 
 /// The attendance screen: the phone camera reads a student's QR code, the
 /// student is checked in for today, and the list underneath shows everyone who
 /// is already present.
 ///
-/// Where the camera is not available (a computer) or a student forgot their
-/// code, the student number can be typed instead: the keyboard button does the
-/// same check-in. On a narrow phone that button sits on the camera picture
-/// rather than in the header, so the title keeps its room.
+/// Class days (the weekdays classes are held, and cancelled training) are set
+/// in Settings, not here. Today's cancellation still shows on this page: the
+/// list says so and nobody can be checked in.
 class AttendanceScannerScreen extends StatefulWidget {
   const AttendanceScannerScreen({super.key});
 
@@ -59,11 +56,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
   DateTime? _lastRawAt;
   static const Duration _sameCodePause = Duration(seconds: 3);
 
-  /// Below this width the header has room for two buttons, not three.
-  static const double _narrowWidth = 380;
-
-  /// The camera plugin works on phones; on a computer the typed number is the
-  /// way to check in.
+  /// The camera plugin works on phones.
   static bool get _cameraSupported =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.android ||
@@ -191,14 +184,6 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
     _run(() => _storage.checkInScanned(scanned));
   }
 
-  Future<void> _openClassDays() async {
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const ClassDaysScreen()),
-    );
-    // A day may have been cancelled or restored there.
-    if (mounted) await _loadToday();
-  }
-
   Future<void> _openReport() async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (_) => const AttendanceReportScreen()),
@@ -207,18 +192,8 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
     if (mounted) await _loadToday();
   }
 
-  Future<void> _enterNumber() async {
-    final entered = await showDialog<String>(
-      context: context,
-      builder: (_) => const _StudentNumberDialog(),
-    );
-    if (entered == null || entered.trim().isEmpty || !mounted) return;
-    await _run(() => _storage.checkInByStudentNo(entered));
-  }
-
   @override
   Widget build(BuildContext context) {
-    final narrow = MediaQuery.sizeOf(context).width < _narrowWidth;
     return AppPage(
       title: 'Attendance',
       subtitle: _dayLabel(DateTime.now()),
@@ -226,24 +201,11 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
         HeaderIconButton(
           icon: Icons.event_note_outlined,
           tooltip: 'Attendance report',
-          onPressed: _openReport,
-        ),
-        HeaderIconButton(
-          icon: Icons.calendar_view_week,
-          tooltip: 'Class days',
           // Amber while today's training is cancelled, so the owner sees it
           // without opening the page.
           color: _cancelledToday ? AppColors.cancelled : null,
-          onPressed: _openClassDays,
+          onPressed: _openReport,
         ),
-        // On a narrow phone this button moves onto the camera picture (below)
-        // so the title is not squeezed.
-        if (!narrow || !_cameraSupported)
-          HeaderIconButton(
-            icon: Icons.keyboard_outlined,
-            tooltip: 'Enter student number',
-            onPressed: _enterNumber,
-          ),
       ],
       child: Column(
         children: [
@@ -252,7 +214,7 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
               flex: 5,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                child: _cameraCard(showTypeButton: narrow),
+                child: _cameraCard(),
               ),
             )
           else
@@ -263,10 +225,9 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
     );
   }
 
-  /// The camera picture in a rounded card, with an aiming frame, the answer of
-  /// the last scan along its foot and, on a narrow phone, the "type a number"
-  /// button in its corner.
-  Widget _cameraCard({required bool showTypeButton}) {
+  /// The camera picture in a rounded card, with an aiming frame and the answer
+  /// of the last scan along its foot.
+  Widget _cameraCard() {
     final last = _last;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -304,12 +265,6 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
                 ),
               ),
             ),
-            if (showTypeButton)
-              Positioned(
-                top: 12,
-                right: 12,
-                child: _TypeNumberButton(onPressed: _enterNumber),
-              ),
             if (last != null)
               Positioned(
                 left: 12,
@@ -341,19 +296,13 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Camera scanning works on Android and iOS phones. Here you '
-                    'can record attendance by typing the student number.',
+                    'Camera scanning works on Android and iOS phones.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
                       color: AppColors.muted,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: _enterNumber,
-                    child: const Text('Enter student number'),
                   ),
                 ],
               ),
@@ -494,13 +443,13 @@ class _AttendanceScannerScreenState extends State<AttendanceScannerScreen> {
         title: 'Training cancelled today',
         detail:
             'No one is counted present or absent. Remove the cancellation in '
-            'Class days to check students in.',
+            'Settings, under Class days, to check students in.',
       ),
       CheckInStatus.unknown => const _Outcome(
         color: AppColors.red,
         icon: Icons.help_outline,
         title: 'Not recognised',
-        detail: 'No student in this registry matches that code or number.',
+        detail: 'No student in this registry matches that code.',
       ),
     };
   }
@@ -577,50 +526,6 @@ class _ResultBanner extends StatelessWidget {
   }
 }
 
-/// The "type a number" button on the camera picture of a narrow phone: a dark
-/// translucent pill, so it reads over any camera image.
-class _TypeNumberButton extends StatelessWidget {
-  const _TypeNumberButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Enter student number',
-      child: Material(
-        color: Colors.black.withValues(alpha: 0.55),
-        shape: const StadiumBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          child: const SizedBox(
-            height: 44,
-            child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 14),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.keyboard_outlined, size: 18, color: Colors.white),
-                  SizedBox(width: 6),
-                  Text(
-                    'Type number',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// Shown in place of the camera when it cannot start: most often the camera
 /// permission was refused.
 class _CameraProblem extends StatelessWidget {
@@ -643,10 +548,8 @@ class _CameraProblem extends StatelessWidget {
           Text(
             denied
                 ? 'Camera permission is off. Allow the camera for this app in '
-                      'the phone settings, then come back. You can still type a '
-                      'student number with the keyboard button.'
-                : 'The camera could not start. You can still type a student '
-                      'number with the keyboard button.',
+                      'the phone settings, then come back.'
+                : 'The camera could not start. Please try again.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: AppDark.textSecondary,
@@ -656,49 +559,6 @@ class _CameraProblem extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Asks for a student number. It owns its text controller, so the controller is
-/// disposed only after the dialog has finished closing.
-class _StudentNumberDialog extends StatefulWidget {
-  const _StudentNumberDialog();
-
-  @override
-  State<_StudentNumberDialog> createState() => _StudentNumberDialogState();
-}
-
-class _StudentNumberDialogState extends State<_StudentNumberDialog> {
-  final TextEditingController _controller = TextEditingController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Enter student number'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        textCapitalization: TextCapitalization.characters,
-        decoration: AppInput.decoration(hint: 'e.g. 12 or TKD-0012'),
-        onSubmitted: (value) => Navigator.of(context).pop(value),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(_controller.text),
-          child: const Text('Check in'),
-        ),
-      ],
     );
   }
 }

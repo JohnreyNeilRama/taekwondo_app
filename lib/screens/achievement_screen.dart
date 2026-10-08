@@ -403,7 +403,6 @@ class _StudentCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 6,
                   children: [
-                    AppChip(label: student.studentNo, emphasized: true),
                     for (final award in Award.all)
                       if ((counts[award] ?? 0) > 0)
                         AwardChip(award: award, count: counts[award]),

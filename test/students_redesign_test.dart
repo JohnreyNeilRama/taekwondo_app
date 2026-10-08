@@ -94,11 +94,15 @@ void main() {
       await _openStudents(tester);
 
       expect(tester.takeException(), isNull);
-      // Edit stays reachable, with a touch target of at least 44.
-      final edit = find.byTooltip('Edit student');
-      expect(edit, findsOneWidget);
-      expect(tester.getSize(edit).width, greaterThanOrEqualTo(44));
-      expect(tester.getSize(edit).height, greaterThanOrEqualTo(44));
+      // Edit stays reachable from the three-dot menu, whose button keeps a
+      // touch target of at least 44.
+      final menu = find.byTooltip('More options');
+      expect(menu, findsOneWidget);
+      expect(tester.getSize(menu).width, greaterThanOrEqualTo(44));
+      expect(tester.getSize(menu).height, greaterThanOrEqualTo(44));
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(find.text('Edit'), findsOneWidget);
     });
 
     testWidgets('the three-dot menu opens the QR code', (

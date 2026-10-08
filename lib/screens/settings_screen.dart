@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/appearance_settings.dart';
 import '../services/backup_service.dart';
+import '../services/class_schedule.dart';
 import '../services/student_storage.dart';
 import '../theme/app_dark.dart';
 import '../widgets/app_page.dart';
 import '../widgets/empty_state_card.dart';
 import '../widgets/registry_header.dart';
 import 'appearance_screen.dart';
+import 'class_days_screen.dart';
 import 'data_transfer_screen.dart';
 import 'trash_screen.dart';
 
@@ -17,6 +19,8 @@ import 'trash_screen.dart';
 ///   good.
 /// * **Data** backs the registry up, brings a backup in, and checks the saved
 ///   file.
+/// * **Class days** sets the weekdays classes are held and marks cancelled
+///   training.
 /// * **Appearance** sets light or dark mode and how large the text is.
 ///
 /// Each opens its own page. What a row says about its page (how many students
@@ -48,6 +52,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// Whether a backup is due. Shown as a red "Backup due" tag on the Data row.
   bool _backupDue = false;
 
+  /// The weekdays classes are held (Monday is 1), or null while unknown or when
+  /// the owner never set them.
+  Set<int>? _classDays;
+
+  /// Whether today is marked training cancelled.
+  bool _cancelledToday = false;
+
   @override
   void initState() {
     super.initState();
@@ -76,10 +87,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (_) {
       due = false;
     }
+    Set<int>? days;
+    var cancelledToday = false;
+    try {
+      final schedule = ClassSchedule();
+      days = await schedule.load();
+      cancelledToday = ClassSchedule.isCancelled(
+        await schedule.loadCancelled(),
+        DateTime.now(),
+      );
+    } catch (_) {
+      days = null;
+    }
     if (!mounted) return;
     setState(() {
       _trashCount = trash;
       _backupDue = due;
+      _classDays = days;
+      _cancelledToday = cancelledToday;
     });
   }
 
@@ -98,6 +123,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (count == null) return 'Restore or permanently delete students';
     if (count == 0) return 'No deleted students';
     return '$count deleted student${count == 1 ? '' : 's'}';
+  }
+
+  static const List<String> _dayNames = [
+    'Mon',
+    'Tue',
+    'Wed',
+    'Thu',
+    'Fri',
+    'Sat',
+    'Sun',
+  ];
+
+  /// The class weekdays in short form ("Mon \u00B7 Wed \u00B7 Fri"), with a note
+  /// when today's training is cancelled.
+  String get _classDaysSubtitle {
+    final days = _classDays;
+    final base = days == null
+        ? 'Not set yet'
+        : days.isEmpty
+        ? 'No class days'
+        : [
+            for (final day in (days.toList()..sort())) _dayNames[day - 1],
+          ].join(' \u00B7 ');
+    return _cancelledToday ? '$base \u00B7 Cancelled today' : base;
   }
 
   @override
@@ -136,6 +185,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? const _DueTag(label: 'Backup due')
                           : null,
                       onTap: () => _open(const DataTransferScreen()),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 28),
+                const SectionLabel('ATTENDANCE'),
+                const SizedBox(height: 10),
+                _SettingsGroup(
+                  children: [
+                    _SettingsRow(
+                      icon: Icons.calendar_view_week,
+                      title: 'Class days',
+                      subtitle: _classDaysSubtitle,
+                      onTap: () => _open(const ClassDaysScreen()),
                     ),
                   ],
                 ),

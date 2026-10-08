@@ -116,7 +116,7 @@ void main() {
     // The belt is saved against the student that was already in the registry:
     // they appear on the belt list and Pending is empty again.
     expect(find.text('Jrey Neil'), findsOneWidget);
-    expect(find.text('TKD-0001'), findsOneWidget);
+    expect(find.text('TKD-0001'), findsNothing);
     expect(find.text('8th Grade Yellow'), findsOneWidget);
     expect(find.text('Pending (0)'), findsOneWidget);
 

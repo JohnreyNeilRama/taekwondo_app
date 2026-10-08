@@ -182,7 +182,7 @@ class _StudentPickerScreenState extends State<StudentPickerScreen> {
       return const EmptyStateCard(
         icon: Icons.search_off,
         title: 'No matching students.',
-        message: 'Try a different name or registry number.',
+        message: 'Try a different name.',
       );
     }
     return null;
@@ -294,8 +294,6 @@ class _StudentOption extends StatelessWidget {
                     color: AppDark.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 6),
-                AppChip(label: student.studentNo, emphasized: true),
               ],
             ),
           ),

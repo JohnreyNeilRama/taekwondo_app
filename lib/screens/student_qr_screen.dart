@@ -112,10 +112,6 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
                         color: AppDark.textPrimary,
                       ),
                     ),
-                    if (student.studentNo.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      AppChip(label: student.studentNo, emphasized: true),
-                    ],
                   ],
                 ),
               ),
@@ -151,8 +147,8 @@ class _StudentQrScreenState extends State<StudentQrScreen> {
             ),
           const SizedBox(height: 16),
           const Text(
-            'The code never changes, even if the name or the registry number '
-            'does, so a printed copy stays valid.',
+            'The code never changes, even if the name does, so a printed copy '
+            'stays valid.',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: AppDark.textSecondary),
           ),

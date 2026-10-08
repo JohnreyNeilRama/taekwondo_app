@@ -4,14 +4,15 @@ import '../models/student.dart';
 import '../theme/app_dark.dart';
 import 'student_avatar.dart';
 
-enum _CardAction { view, qr, trash }
+enum _CardAction { view, edit, qr, trash }
 
 /// One student in the registry list: a dark rounded card with a thin crimson
 /// line down its left edge, the saved picture, the name, the nickname and
-/// school when there are any, an Edit button and a three-dot menu.
+/// school when there are any, and a three-dot menu holding View details, Edit,
+/// QR code and Move to Trash.
 ///
-/// The whole card opens the student's details. The picture (which opens larger),
-/// the Edit button and the menu take their own taps. Nothing on the card shows
+/// The whole card opens the student's details. The picture (which opens larger)
+/// and the menu take their own taps. Nothing on the card shows
 /// the registry number or the contact number.
 class StudentListCard extends StatelessWidget {
   const StudentListCard({
@@ -104,14 +105,7 @@ class StudentListCard extends StatelessWidget {
                         ),
                         SizedBox(width: compact ? 12 : 16),
                         Expanded(child: _details()),
-                        const SizedBox(width: 8),
-                        // Edit takes its own tap, so the card underneath is not
-                        // opened as well.
-                        _SquareButton(
-                          icon: Icons.edit_outlined,
-                          tooltip: 'Edit student',
-                          onPressed: onEdit,
-                        ),
+                        const SizedBox(width: 4),
                         _menu(),
                       ],
                     ),
@@ -188,6 +182,9 @@ class StudentListCard extends StatelessWidget {
   Widget _menu() {
     return PopupMenuButton<_CardAction>(
       tooltip: 'More options',
+      // 12 px around the 24 px icon makes the button 48 x 48: a comfortable
+      // touch target, since this menu is also the way to Edit.
+      padding: const EdgeInsets.all(12),
       color: AppDark.surfaceHigh,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
@@ -199,6 +196,8 @@ class StudentListCard extends StatelessWidget {
         switch (action) {
           case _CardAction.view:
             onView();
+          case _CardAction.edit:
+            onEdit();
           case _CardAction.qr:
             onShowQr();
           case _CardAction.trash:
@@ -209,6 +208,10 @@ class StudentListCard extends StatelessWidget {
         PopupMenuItem(
           value: _CardAction.view,
           child: _MenuRow(icon: Icons.person_outline, label: 'View details'),
+        ),
+        PopupMenuItem(
+          value: _CardAction.edit,
+          child: _MenuRow(icon: Icons.edit_outlined, label: 'Edit'),
         ),
         PopupMenuItem(
           value: _CardAction.qr,
@@ -223,42 +226,6 @@ class StudentListCard extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// A 44 px rounded-square icon button on a dark plate, with a ripple.
-class _SquareButton extends StatelessWidget {
-  const _SquareButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: AppDark.surfaceHigh,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: AppDark.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: Icon(icon, size: 20, color: AppDark.icon),
-          ),
-        ),
-      ),
     );
   }
 }

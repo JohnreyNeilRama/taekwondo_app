@@ -108,9 +108,9 @@ void main() {
     expect(find.text('1 student'), findsOneWidget);
     expect(find.text('No students assigned to this belt yet'), findsNothing);
 
-    // The student's row is there, with their registry number.
+    // The student's row is there; the registry number is not shown.
     expect(find.text('Nguyen Van A'), findsWidgets);
-    expect(find.text('TKD-0001'), findsWidgets);
+    expect(find.text('TKD-0001'), findsNothing);
 
     // Back returns to the Promotion page.
     await tester.tap(find.byTooltip('Back'));

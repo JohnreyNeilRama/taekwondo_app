@@ -293,7 +293,6 @@ class _TrashCard extends StatelessWidget {
                       spacing: 6,
                       runSpacing: 6,
                       children: [
-                        AppChip(label: student.studentNo, emphasized: true),
                         if (deleted.isNotEmpty)
                           AppChip(label: 'Deleted $deleted'),
                       ],
