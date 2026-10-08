@@ -351,7 +351,13 @@ class _PromotionScreenState extends State<PromotionScreen> {
                 (r) =>
                     r.studentName.toLowerCase().contains(query) ||
                     r.studentNo.toLowerCase().contains(query) ||
-                    r.belt.toLowerCase().contains(query),
+                    r.belt.toLowerCase().contains(query) ||
+                    // The nickname lives on the student, not on the promotion
+                    // record, so it is looked up from the registry.
+                    (_studentFor(
+                          r.studentId,
+                        )?.nickname.toLowerCase().contains(query) ??
+                        false),
               )
               .toList();
     matches.sort((a, b) => _rankOf(a).compareTo(_rankOf(b)));

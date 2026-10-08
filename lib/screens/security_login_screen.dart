@@ -190,16 +190,6 @@ class _SecurityLoginScreenState extends State<SecurityLoginScreen> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    const NoticeCard(
-                      icon: Icons.wifi_off_outlined,
-                      message:
-                          'Checked on this device only. No internet is needed, '
-                          'nothing is sent anywhere, and the password is never '
-                          'stored as you typed it. It locks the app — keep your '
-                          'phone lock screen on too, since that is what guards '
-                          'the saved file.',
-                    ),
                   ],
                 ),
               ),

@@ -118,7 +118,7 @@ void main() {
       'Promotion',
       'Scan',
       'Achievement',
-      'Data',
+      'Settings',
     ]);
     // Students is the page on screen, and it sits in the first slot.
     expect(bar.selected, 0);
