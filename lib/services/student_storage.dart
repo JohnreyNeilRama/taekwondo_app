@@ -20,6 +20,7 @@ class DeletedStudent {
   const DeletedStudent({
     required this.student,
     this.promotion,
+    this.promotionHistory = const [],
     this.achievements = const [],
   });
 
@@ -28,6 +29,10 @@ class DeletedStudent {
 
   /// The single `promotions` row of that student, or null when they had none.
   final Map<String, Object?>? promotion;
+
+  /// Every `promotion_history` row of that student: the belts they held
+  /// before their current one.
+  final List<Map<String, Object?>> promotionHistory;
 
   /// Every `achievements` row of that student.
   final List<Map<String, Object?>> achievements;
@@ -388,6 +393,12 @@ class StudentStorage {
         whereArgs: [id],
         limit: 1,
       );
+      final promotionHistory = await txn.query(
+        'promotion_history',
+        where: 'student_id = ?',
+        whereArgs: [id],
+        orderBy: 'id',
+      );
       final achievements = await txn.query(
         'achievements',
         where: 'student_id = ?',
@@ -397,6 +408,7 @@ class StudentStorage {
       return DeletedStudent(
         student: students.first,
         promotion: promotions.isEmpty ? null : promotions.first,
+        promotionHistory: promotionHistory,
         achievements: achievements,
       );
     });
@@ -477,6 +489,11 @@ class StudentStorage {
       if (inTrash.isEmpty) return false;
       await txn.delete('achievements', where: 'student_id = ?', whereArgs: [id]);
       await txn.delete('promotions', where: 'student_id = ?', whereArgs: [id]);
+      await txn.delete(
+        'promotion_history',
+        where: 'student_id = ?',
+        whereArgs: [id],
+      );
       await txn.delete(_table, where: 'id = ?', whereArgs: [id]);
       await _renumberStudents(txn);
       return true;
@@ -535,6 +552,9 @@ ORDER BY s.deleted_at DESC, s.id DESC
       await _insertSnapshot(txn, deleted.student);
       final promotion = deleted.promotion;
       if (promotion != null) await txn.insert('promotions', promotion);
+      for (final entry in deleted.promotionHistory) {
+        await txn.insert('promotion_history', entry);
+      }
       for (final achievement in deleted.achievements) {
         await txn.insert('achievements', achievement);
       }

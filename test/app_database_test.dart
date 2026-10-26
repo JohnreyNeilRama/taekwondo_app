@@ -193,4 +193,64 @@ CREATE TABLE attendance (
     expect(again[0]['created_at'], rows[0]['created_at']);
     expect(again[1]['created_at'], rows[1]['created_at']);
   });
+
+  test('upgrading a version 6 database adds promotion history, keeps belts',
+      () async {
+    final folder = await Directory.systemTemp.createTemp('tkd_app_v7_test');
+    addTearDown(() async {
+      await AppDatabase.debugReset();
+      try {
+        await folder.delete(recursive: true);
+      } catch (_) {
+        // A failed cleanup must not fail a test.
+      }
+    });
+    final path = p.join(folder.path, 'tkd_app.db');
+
+    // A database as version 6 left it: a student and their current belt, and
+    // no history table yet. Only the tables the upgrade touches are needed.
+    final old = await databaseFactory.openDatabase(
+      path,
+      options: OpenDatabaseOptions(
+        version: 6,
+        onCreate: (db, _) async {
+          await db.execute('''
+CREATE TABLE students (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_no TEXT NOT NULL UNIQUE,
+  name       TEXT NOT NULL,
+  deleted_at TEXT NOT NULL DEFAULT ''
+)
+''');
+          await db.execute('''
+CREATE TABLE promotions (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id          INTEGER NOT NULL UNIQUE,
+  belt                TEXT    NOT NULL DEFAULT '',
+  last_promotion_date TEXT    NOT NULL DEFAULT ''
+)
+''');
+        },
+      ),
+    );
+    final anaId = await old.insert('students', {
+      'student_no': 'TKD-0001',
+      'name': 'Ana Cruz',
+    });
+    await old.insert('promotions', {
+      'student_id': anaId,
+      'belt': '9th Grade White',
+      'last_promotion_date': '01/05/2026',
+    });
+    await old.close();
+
+    await AppDatabase.debugReset();
+    AppDatabase.debugOverridePath = path;
+    final db = await AppDatabase.instance.database;
+
+    expect(await db.query('promotion_history'), isEmpty);
+    final belts = await db.query('promotions');
+    expect(belts.single['belt'], '9th Grade White');
+    expect(belts.single['last_promotion_date'], '01/05/2026');
+  });
 }

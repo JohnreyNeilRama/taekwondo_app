@@ -209,6 +209,7 @@ class BackupService {
       return <String, Object?>{
         'students': await txn.query('students', orderBy: 'id'),
         'promotions': await txn.query('promotions', orderBy: 'id'),
+        'promotionHistory': await txn.query('promotion_history', orderBy: 'id'),
         'achievements': await txn.query('achievements', orderBy: 'id'),
         'attendance': await txn.query('attendance', orderBy: 'id'),
       };
@@ -264,6 +265,8 @@ class BackupService {
     }
     final students = _rows(decoded['students'], required: true);
     final promotions = _rows(decoded['promotions']);
+    // A backup made before promotion history existed simply has none.
+    final promotionHistory = _rows(decoded['promotionHistory']);
     final achievements = _rows(decoded['achievements']);
     // A backup made before attendance existed has no such table: it is simply
     // empty, and the rest of the file imports exactly as it always did.
@@ -273,6 +276,10 @@ class BackupService {
     return db.transaction((txn) async {
       final studentColumns = await _columns(txn, 'students', {'id'});
       final promotionColumns = await _columns(txn, 'promotions', {
+        'id',
+        'student_id',
+      });
+      final historyColumns = await _columns(txn, 'promotion_history', {
         'id',
         'student_id',
       });
@@ -386,6 +393,30 @@ class BackupService {
         });
         withPromotion.add(target);
         addedPromotions++;
+      }
+
+      // Earlier belts only ever add: an entry already here for the same
+      // student, belt and date is not added again, so importing the same
+      // backup twice changes nothing.
+      String historyKey(Object target, Map<String, Object?> entry) =>
+          '$target\u0000${entry['belt']}\u0000${entry['promotion_date']}';
+      final seenHistory = <String>{
+        for (final row in await txn.query(
+          'promotion_history',
+          columns: ['student_id', 'belt', 'promotion_date'],
+        ))
+          historyKey(row['student_id'] as int, row),
+      };
+      for (final row in promotionHistory) {
+        final oldStudent = _asInt(row['student_id']);
+        final target = oldStudent == null ? null : idMap[oldStudent];
+        final clean = _clean(row, historyColumns);
+        if (target == null || (clean['belt'] as String? ?? '').isEmpty) {
+          skipped++;
+          continue;
+        }
+        if (!seenHistory.add(historyKey(target, clean))) continue;
+        await txn.insert('promotion_history', {...clean, 'student_id': target});
       }
 
       // An award already on file for the same student, date, event and medal is

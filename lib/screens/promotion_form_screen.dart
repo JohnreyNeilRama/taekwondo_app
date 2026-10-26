@@ -33,6 +33,25 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
 
   bool get _isEditing => widget.initial != null;
 
+  /// Whether this save changes an existing belt, so the current one will be
+  /// archived in the promotion history.
+  bool get _isPromoting {
+    final initial = widget.initial;
+    return initial != null &&
+        initial.belt.isNotEmpty &&
+        BeltCatalog.normalize(initial.belt) != _belt;
+  }
+
+  /// Tells the owner the belt being replaced is kept, not lost.
+  String get _promotionNotice {
+    final initial = widget.initial!;
+    final previous = BeltCatalog.normalize(initial.belt);
+    final date = initial.lastPromotionDate;
+    final since = date.isEmpty ? '' : ' (promoted $date)';
+    return '$previous$since will be kept in the promotion history. '
+        'Set the date of this new promotion above.';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -110,6 +129,10 @@ class _PromotionFormScreenState extends State<PromotionFormScreen> {
           _beltField(),
           const SizedBox(height: 16),
           _dateField(),
+          if (_isPromoting) ...[
+            const SizedBox(height: 16),
+            NoticeCard(icon: Icons.history, message: _promotionNotice),
+          ],
           const SizedBox(height: 24),
           const NoticeCard(
             icon: Icons.info_outline,

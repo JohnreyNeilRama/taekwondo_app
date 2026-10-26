@@ -15,7 +15,7 @@ class AppDatabase {
   static final AppDatabase instance = AppDatabase._();
 
   static const String _dbName = 'tkd_app.db';
-  static const int _dbVersion = 6;
+  static const int _dbVersion = 7;
 
   /// A small key/value table for bookkeeping. Registry numbers no longer use
   /// it — `StudentStorage` keeps them sequential itself — but the table stays,
@@ -166,6 +166,8 @@ CREATE TABLE achievements (
         await db.execute(_createMetaTable);
         await db.execute(_createAttendanceTable);
         await db.execute(_createAttendanceIndex);
+        await db.execute(_createPromotionHistoryTable);
+        await db.execute(_createPromotionHistoryIndex);
       },
       // A phone that already holds the v1 registry is brought up to date here
       // instead of being refused, so an update never costs the owner their
@@ -221,6 +223,14 @@ CREATE TABLE achievements (
           );
           await backfillCreatedAt(db);
         }
+        // Version 7 adds the promotion history: every belt a student held
+        // before their current one, with the date they were promoted to it. A
+        // brand new table, so no existing record is touched; the current belt
+        // stays in `promotions` exactly where it was.
+        if (oldVersion < 7) {
+          await db.execute(_createPromotionHistoryTable);
+          await db.execute(_createPromotionHistoryIndex);
+        }
       },
     );
   }
@@ -272,6 +282,25 @@ CREATE TABLE IF NOT EXISTS attendance (
   static const String _createAttendanceIndex =
       'CREATE INDEX IF NOT EXISTS idx_attendance_attended_on '
       'ON attendance (attended_on)';
+
+  /// The promotion history, kept in one place so `onCreate` and `onUpgrade`
+  /// can never disagree about its shape. One row per belt a student held
+  /// before their current one; `promotion_date` is the `MM/DD/YYYY` date they
+  /// were promoted to that belt, and `recorded_at` the moment it was archived.
+  static const String _createPromotionHistoryTable = '''
+CREATE TABLE IF NOT EXISTS promotion_history (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  student_id     INTEGER NOT NULL,
+  belt           TEXT    NOT NULL DEFAULT '',
+  promotion_date TEXT    NOT NULL DEFAULT '',
+  recorded_at    TEXT    NOT NULL DEFAULT '',
+  FOREIGN KEY (student_id) REFERENCES students (id) ON DELETE CASCADE
+)
+''';
+
+  static const String _createPromotionHistoryIndex =
+      'CREATE INDEX IF NOT EXISTS idx_promotion_history_student_id '
+      'ON promotion_history (student_id)';
 
   /// The bookkeeping table, kept in one place so `onCreate` and `onUpgrade`
   /// can never disagree about its shape.

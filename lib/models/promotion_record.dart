@@ -77,3 +77,45 @@ class PromotionRecord {
     lastPromotionDate: map['last_promotion_date'] as String? ?? '',
   );
 }
+
+/// One belt a student held before their current one, with the date they were
+/// promoted to it.
+///
+/// [PromotionStorage.saveForStudent] writes one of these every time a
+/// student's belt changes, before the current belt is overwritten, so a
+/// promotion never erases the belt that came before it.
+class PromotionHistoryEntry {
+  const PromotionHistoryEntry({
+    this.id,
+    required this.studentId,
+    this.belt = '',
+    this.promotionDate = '',
+    this.recordedAt = '',
+  });
+
+  /// Primary key of the `promotion_history` row; null until it is saved.
+  final int? id;
+
+  /// The `students.id` this entry belongs to.
+  final int studentId;
+
+  /// The belt the student held, e.g. `9th Grade White`.
+  final String belt;
+
+  /// The date the student was promoted to [belt], as `MM/DD/YYYY`; empty when
+  /// none was recorded.
+  final String promotionDate;
+
+  /// When the entry was archived, as local-time ISO 8601 text. Used to keep
+  /// entries in order when their promotion dates are missing or equal.
+  final String recordedAt;
+
+  factory PromotionHistoryEntry.fromMap(Map<String, Object?> map) =>
+      PromotionHistoryEntry(
+        id: map['id'] as int?,
+        studentId: map['student_id'] as int? ?? 0,
+        belt: map['belt'] as String? ?? '',
+        promotionDate: map['promotion_date'] as String? ?? '',
+        recordedAt: map['recorded_at'] as String? ?? '',
+      );
+}
